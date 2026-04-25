@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+
+{% block title %}Learning Guide{% endblock %}
+
+{% block content %}
+  <section class="page-header">
+    <p class="eyebrow">Learning Guide</p>
+    <h1>Your study path</h1>
+    <p class="muted">Use this page to review the main topics, see what to learn first, and decide what to study next.</p>
+  </section>
+
+  {% if graph.nodes %}
+    <section class="guide-grid">
+      <div class="card guide-card highlight-card">
+        <p class="eyebrow">Summary</p>
+        <h2>Simple explanation</h2>
+        <p class="muted">Start with the summary on the upload page, then use these topic cards to revise in order.</p>
+        <a class="button secondary" href="{{ url_for('upload') }}">Back to Summary</a>
+      </div>
+
+      <div class="card guide-card">
+        <p class="eyebrow">Topics</p>
+        <h2>Important ideas</h2>
+        <div class="topic-cloud">
+          {% for node in graph.nodes %}
+            {% if node.name != "Summary" %}
+              <span class="topic-pill {% if node.important %}important{% endif %}">
+                {{ node.name }}
+              </span>
+            {% endif %}
+          {% endfor %}
+        </div>
+      </div>
+    </section>
+
+    <section class="learning-columns">
+      <div class="card">
+        <p class="eyebrow">Learn Before</p>
+        <h2>Review these first</h2>
+        {% if suggestions %}
+          <div class="study-list">
+            {% for topic, items in suggestions.items() %}
+              {% if items.before %}
+                <div class="study-item">
+                  <h3>{{ topic }}</h3>
+                  <p>Before this, review {{ items.before | join(", ") }}.</p>
+                </div>
+              {% endif %}
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="muted">No earlier topics found yet. Upload a PDF to build your guide.</p>
+        {% endif %}
+      </div>
+
+      <div class="card">
+        <p class="eyebrow">Learn Next</p>
+        <h2>Continue with these</h2>
+        {% if suggestions %}
+          <div class="study-list">
+            {% for topic, items in suggestions.items() %}
+              {% if items.after %}
+                <div class="study-item">
+                  <h3>{{ topic }}</h3>
+                  <p>After this, study {{ items.after | join(", ") }}.</p>
+                </div>
+              {% endif %}
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="muted">No next topics found yet. Upload a PDF to build your guide.</p>
+        {% endif %}
+      </div>
+    </section>
+
+    <section class="card connections-card">
+      <div class="section-title">
+        <div>
+          <p class="eyebrow">Connections</p>
+          <h2>How topics link together</h2>
+        </div>
+        <a class="button secondary" href="{{ url_for('quiz') }}">Test Understanding</a>
+      </div>
+
+      <div class="connection-list">
+        {% for subject, relation, object_name in graph.triples %}
+          {% if subject != "Summary" %}
+            <div class="connection-row">
+              <span>{{ subject }}</span>
+              <strong>
+                {% if relation == "prerequisite" %}
+                  helps with
+                {% elif relation == "next topic" %}
+                  leads to
+                {% else %}
+                  connects to
+                {% endif %}
+              </strong>
+              <span>{{ object_name }}</span>
+            </div>
+          {% endif %}
+        {% endfor %}
+      </div>
+    </section>
+  {% else %}
+    <section class="card empty-state">
+      <h2>No learning guide yet</h2>
+      <p>Upload and summarize a PDF first. Your topics, study order, and quiz will appear here.</p>
+      <a class="button" href="{{ url_for('upload') }}">Upload PDF</a>
+    </section>
+  {% endif %}
+{% endblock %}

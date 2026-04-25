@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block title %}Quiz{% endblock %}
+
+{% block content %}
+  <section class="page-header">
+    <p class="eyebrow">Quiz</p>
+    <h1>Test your understanding</h1>
+    <p class="muted">Use these questions after reading the summary and learning guide.</p>
+  </section>
+
+  {% if quiz %}
+    <section class="card">
+      <ol class="quiz-list large">
+        {% for item in quiz %}
+          <li>{{ item }}</li>
+        {% endfor %}
+      </ol>
+    </section>
+  {% else %}
+    <section class="card empty-state">
+      <h2>No quiz yet</h2>
+      <p>Upload and summarize a PDF first. Quiz questions will appear here after Gemini generates them.</p>
+      <a class="button" href="{{ url_for('upload') }}">Upload PDF</a>
+    </section>
+  {% endif %}
+{% endblock %}

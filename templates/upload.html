@@ -1,37 +1,79 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Upload PDF</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
-  </head>
-  <body>
-    <main class="page">
-      <section class="panel">
-        <p class="eyebrow">AI LearnMate</p>
-        <h1>Upload PDF</h1>
-        <p class="muted">Choose a PDF file and Gemini will summarize the extracted text.</p>
+{% extends "base.html" %}
 
-        <form method="POST" enctype="multipart/form-data">
-          <label for="file">Choose a file</label>
+{% block title %}Upload PDF{% endblock %}
+
+{% block content %}
+  <section class="page-header">
+    <p class="eyebrow">Upload</p>
+    <h1>Summarize a PDF</h1>
+    <p class="muted">Choose a PDF file. AI LearnMate will create study notes, topic suggestions, and quiz questions.</p>
+  </section>
+
+  <section class="upload-grid">
+    <div class="card upload-card">
+      <form id="upload-form" method="POST" enctype="multipart/form-data">
+        <label class="drop-zone" for="file">
+          <span class="drop-icon">PDF</span>
+          <strong>Drop your PDF here or click to browse</strong>
+          <small>Only PDF files are supported.</small>
           <input id="file" name="file" type="file" accept="application/pdf">
-          <button type="submit">Summarize</button>
-        </form>
+        </label>
 
-        {% if error %}
-          <div class="message error">{{ error }}</div>
-        {% endif %}
+        <button type="submit">Summarize PDF</button>
+      </form>
 
-        {% if summary %}
-          <div class="summary-box">
-            <h2>Summary</h2>
-            <p>{{ summary }}</p>
-          </div>
-        {% endif %}
+      <div id="loading" class="loading" hidden>
+        <span class="spinner"></span>
+        Processing your PDF...
+      </div>
 
-        <a class="link" href="{{ url_for('home') }}">Back home</a>
-      </section>
-    </main>
-  </body>
-</html>
+      {% if error %}
+        <div class="message error">{{ error }}</div>
+      {% endif %}
+
+    </div>
+
+    <div class="card info-card">
+      <h2>What happens next?</h2>
+      <ul>
+        <li>Your PDF is read and turned into plain text.</li>
+        <li>A simple summary is created for quick revision.</li>
+        <li>Main topics are organized into a study path.</li>
+        <li>Quiz questions are generated to test understanding.</li>
+      </ul>
+    </div>
+  </section>
+
+  {% if summary %}
+    <section class="card summary-box">
+      <div class="section-title">
+        <div>
+          <p class="eyebrow">Summary</p>
+          <h2>Generated Study Notes</h2>
+        </div>
+        <div class="actions compact">
+          <a class="button secondary" href="{{ url_for('graph') }}">Open Learning Guide</a>
+          <a class="button secondary" href="{{ url_for('quiz') }}">Open Quiz</a>
+        </div>
+      </div>
+      <p>{{ summary }}</p>
+    </section>
+  {% endif %}
+
+  {% if quiz %}
+    <section class="card quiz-preview">
+      <div class="section-title">
+        <div>
+          <p class="eyebrow">Quiz</p>
+          <h2>Generated Practice Questions</h2>
+        </div>
+      </div>
+
+      <ol class="quiz-list">
+        {% for item in quiz %}
+          <li>{{ item }}</li>
+        {% endfor %}
+      </ol>
+    </section>
+  {% endif %}
+{% endblock %}

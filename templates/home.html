@@ -1,21 +1,19 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>AI LearnMate</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
-  </head>
-  <body>
-    <main class="home-page">
-      <section class="hero">
-        <p class="eyebrow">PDF Summarizer</p>
-        <h1>AI LearnMate</h1>
-        <p class="intro">
-          Upload a PDF and get a simple summary that is easier to study.
-        </p>
+{% extends "base.html" %}
+
+{% block title %}AI LearnMate{% endblock %}
+
+{% block content %}
+  <section class="hero">
+    <div>
+      <p class="eyebrow">Simple PDF learning</p>
+      <h1>Turn any study PDF into clear notes and next steps.</h1>
+      <p class="intro">
+        Upload a PDF and AI LearnMate will create a simple summary, important topics, study order, and quiz questions.
+      </p>
+      <div class="actions">
         <a class="button" href="{{ url_for('upload') }}">Upload PDF</a>
-      </section>
-    </main>
-  </body>
-</html>
+        <a class="button secondary" href="{{ url_for('graph') }}">Open Learning Guide</a>
+      </div>
+    </div>
+  </section>
+{% endblock %}
