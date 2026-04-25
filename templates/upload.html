@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Upload PDF</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  </head>
+  <body>
+    <main class="page">
+      <section class="panel">
+        <p class="eyebrow">AI LearnMate</p>
+        <h1>Upload PDF</h1>
+        <p class="muted">Choose a PDF file and Gemini will summarize the extracted text.</p>
+
+        <form method="POST" enctype="multipart/form-data">
+          <label for="file">Choose a file</label>
+          <input id="file" name="file" type="file" accept="application/pdf">
+          <button type="submit">Summarize</button>
+        </form>
+
+        {% if error %}
+          <div class="message error">{{ error }}</div>
+        {% endif %}
+
+        {% if summary %}
+          <div class="summary-box">
+            <h2>Summary</h2>
+            <p>{{ summary }}</p>
+          </div>
+        {% endif %}
+
+        <a class="link" href="{{ url_for('home') }}">Back home</a>
+      </section>
+    </main>
+  </body>
+</html>
