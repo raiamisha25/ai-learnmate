@@ -43,7 +43,12 @@
               {% if items.before %}
                 <div class="study-item">
                   <h3>{{ topic }}</h3>
-                  <p>Before this, review {{ items.before | join(", ") }}.</p>
+                  <p>Learn before:</p>
+                  <ul class="mini-list">
+                    {% for before_topic in items.before %}
+                      <li>{{ before_topic }}</li>
+                    {% endfor %}
+                  </ul>
                 </div>
               {% endif %}
             {% endfor %}
@@ -62,7 +67,12 @@
               {% if items.after %}
                 <div class="study-item">
                   <h3>{{ topic }}</h3>
-                  <p>After this, study {{ items.after | join(", ") }}.</p>
+                  <p>Learn next:</p>
+                  <ul class="mini-list">
+                    {% for after_topic in items.after %}
+                      <li>{{ after_topic }}</li>
+                    {% endfor %}
+                  </ul>
                 </div>
               {% endif %}
             {% endfor %}
@@ -88,9 +98,9 @@
             <div class="connection-row">
               <span>{{ subject }}</span>
               <strong>
-                {% if relation == "prerequisite" %}
+                {% if relation in ["PREREQUISITE", "prerequisite"] %}
                   helps with
-                {% elif relation == "next topic" %}
+                {% elif relation in ["NEXT_TOPIC", "next topic"] %}
                   leads to
                 {% else %}
                   connects to

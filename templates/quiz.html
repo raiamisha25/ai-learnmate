@@ -6,21 +6,127 @@
   <section class="page-header">
     <p class="eyebrow">Quiz</p>
     <h1>Test your understanding</h1>
-    <p class="muted">Use these questions after reading the summary and learning guide.</p>
+    <p class="muted">Answer one question at a time and see your score at the end.</p>
   </section>
 
   {% if quiz %}
-    <section class="card">
-      <ol class="quiz-list large">
-        {% for item in quiz %}
-          <li>{{ item }}</li>
-        {% endfor %}
-      </ol>
+    <section class="quiz-shell card">
+      <div class="quiz-topline">
+        <span id="progress-text">Question 1 of {{ quiz|length }}</span>
+        <span id="score-text">Score: 0</span>
+      </div>
+
+      <div class="progress-track">
+        <div id="progress-bar" class="progress-bar"></div>
+      </div>
+
+      <h2 id="question-text"></h2>
+
+      <div id="options-list" class="options-list"></div>
+
+      <p id="feedback" class="feedback"></p>
+
+      <div class="quiz-actions">
+        <button id="next-button" type="button" hidden>Next Question</button>
+        <button id="retry-button" class="button secondary" type="button" hidden>Take Quiz Again</button>
+      </div>
     </section>
+
+    <script>
+      const quiz = {{ quiz | tojson }};
+      let currentQuestion = 0;
+      let score = 0;
+
+      const progressText = document.getElementById("progress-text");
+      const scoreText = document.getElementById("score-text");
+      const progressBar = document.getElementById("progress-bar");
+      const questionText = document.getElementById("question-text");
+      const optionsList = document.getElementById("options-list");
+      const feedback = document.getElementById("feedback");
+      const nextButton = document.getElementById("next-button");
+      const retryButton = document.getElementById("retry-button");
+
+      function showQuestion() {
+        const question = quiz[currentQuestion];
+
+        progressText.textContent = `Question ${currentQuestion + 1} of ${quiz.length}`;
+        scoreText.textContent = `Score: ${score}`;
+        progressBar.style.width = `${(currentQuestion / quiz.length) * 100}%`;
+        questionText.textContent = question.question;
+        feedback.textContent = "";
+        feedback.className = "feedback";
+        nextButton.hidden = true;
+        optionsList.innerHTML = "";
+
+        question.options.forEach((option) => {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "option-button";
+          button.textContent = option;
+          button.addEventListener("click", () => checkAnswer(button, option, question.answer));
+          optionsList.appendChild(button);
+        });
+      }
+
+      function checkAnswer(selectedButton, selectedOption, correctAnswer) {
+        const optionButtons = document.querySelectorAll(".option-button");
+
+        optionButtons.forEach((button) => {
+          button.disabled = true;
+
+          if (button.textContent === correctAnswer) {
+            button.classList.add("correct");
+          }
+        });
+
+        if (selectedOption === correctAnswer) {
+          score += 1;
+          feedback.textContent = "Correct";
+          feedback.classList.add("correct-text");
+        } else {
+          selectedButton.classList.add("wrong");
+          feedback.textContent = `Wrong. Correct answer: ${correctAnswer}`;
+          feedback.classList.add("wrong-text");
+        }
+
+        scoreText.textContent = `Score: ${score}`;
+        nextButton.hidden = false;
+      }
+
+      function showFinalScore() {
+        progressText.textContent = `Question ${quiz.length} of ${quiz.length}`;
+        progressBar.style.width = "100%";
+        questionText.textContent = `You scored ${score} / ${quiz.length}`;
+        optionsList.innerHTML = "";
+        feedback.textContent = "Great work. Review the learning guide, then try again to improve your score.";
+        feedback.className = "feedback";
+        nextButton.hidden = true;
+        retryButton.hidden = false;
+      }
+
+      nextButton.addEventListener("click", () => {
+        currentQuestion += 1;
+
+        if (currentQuestion < quiz.length) {
+          showQuestion();
+        } else {
+          showFinalScore();
+        }
+      });
+
+      retryButton.addEventListener("click", () => {
+        currentQuestion = 0;
+        score = 0;
+        retryButton.hidden = true;
+        showQuestion();
+      });
+
+      showQuestion();
+    </script>
   {% else %}
     <section class="card empty-state">
       <h2>No quiz yet</h2>
-      <p>Upload and summarize a PDF first. Quiz questions will appear here after Gemini generates them.</p>
+      <p>Upload and summarize a PDF first. Multiple choice questions will appear here after they are generated.</p>
       <a class="button" href="{{ url_for('upload') }}">Upload PDF</a>
     </section>
   {% endif %}

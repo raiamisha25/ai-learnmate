@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block title %}Find Topic{% endblock %}
+
+{% block content %}
+  <section class="page-header">
+    <p class="eyebrow">Find Topic</p>
+    <h1>Get a study plan for any topic</h1>
+    <p class="muted">Type a topic and AI LearnMate will show what to learn before and what to study next.</p>
+  </section>
+
+  <section class="card topic-search-card">
+    <form id="topic-form" class="topic-form" method="POST">
+      <label for="topic">Enter a topic</label>
+      <input id="topic" name="topic" type="text" placeholder="Example: Linked List">
+      <button type="submit">Get Study Plan</button>
+    </form>
+
+    <div id="topic-loading" class="loading" hidden>
+      <span class="spinner"></span>
+      Analyzing...
+    </div>
+
+    {% if error %}
+      <div class="message error">{{ error }}</div>
+    {% endif %}
+  </section>
+{% endblock %}

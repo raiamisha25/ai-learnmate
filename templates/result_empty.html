@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+
+{% block title %}Learning Guide{% endblock %}
+
+{% block content %}
+  <section class="card empty-state">
+    <h2>No learning guide yet</h2>
+    <p>Upload a PDF or search for a topic to create your study path.</p>
+    <div class="actions">
+      <a class="button" href="{{ url_for('upload') }}">Upload PDF</a>
+      <a class="button secondary" href="{{ url_for('topic') }}">Find Topic</a>
+    </div>
+  </section>
+{% endblock %}

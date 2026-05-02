@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block title %}{{ topic }} Study Plan{% endblock %}
+
+{% block content %}
+  <section class="page-header">
+    <p class="eyebrow">Study Plan</p>
+    <h1>{{ topic }}</h1>
+    <p class="muted">Use this quick path to know what to review first and where to go next.</p>
+  </section>
+
+  <section class="learning-columns">
+    <div class="card">
+      <p class="eyebrow">Learn Before</p>
+      <h2>Review these first</h2>
+      {% if before %}
+        <ul class="mini-list">
+          {% for topic_name in before %}
+            <li>{{ topic_name }}</li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="muted">No earlier topics found yet.</p>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <p class="eyebrow">Learn Next</p>
+      <h2>Continue with these</h2>
+      {% if after %}
+        <ul class="mini-list">
+          {% for topic_name in after %}
+            <li>{{ topic_name }}</li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="muted">No next topics found yet.</p>
+      {% endif %}
+    </div>
+  </section>
+
+  <div class="actions">
+    <a class="button secondary" href="{{ url_for('topic') }}">Search Another Topic</a>
+    <a class="button secondary" href="{{ url_for('graph') }}">Open Learning Guide</a>
+  </div>
+{% endblock %}

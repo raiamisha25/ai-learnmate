@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block title %}Choose Topic{% endblock %}
+
+{% block content %}
+  <section class="page-header">
+    <p class="eyebrow">Choose Meaning</p>
+    <h1>Which “{{ topic }}” do you mean?</h1>
+    <p class="muted">This topic can mean different things. Pick one so your study plan is accurate.</p>
+  </section>
+
+  <section class="card option-card">
+    <div class="option-grid">
+      {% for option in options %}
+        <form method="POST">
+          <input type="hidden" name="selected_topic" value="{{ option }}">
+          <button class="option-choice" type="submit">{{ option }}</button>
+        </form>
+      {% endfor %}
+    </div>
+  </section>
+{% endblock %}

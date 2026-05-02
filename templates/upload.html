@@ -44,36 +44,4 @@
     </div>
   </section>
 
-  {% if summary %}
-    <section class="card summary-box">
-      <div class="section-title">
-        <div>
-          <p class="eyebrow">Summary</p>
-          <h2>Generated Study Notes</h2>
-        </div>
-        <div class="actions compact">
-          <a class="button secondary" href="{{ url_for('graph') }}">Open Learning Guide</a>
-          <a class="button secondary" href="{{ url_for('quiz') }}">Open Quiz</a>
-        </div>
-      </div>
-      <p>{{ summary }}</p>
-    </section>
-  {% endif %}
-
-  {% if quiz %}
-    <section class="card quiz-preview">
-      <div class="section-title">
-        <div>
-          <p class="eyebrow">Quiz</p>
-          <h2>Generated Practice Questions</h2>
-        </div>
-      </div>
-
-      <ol class="quiz-list">
-        {% for item in quiz %}
-          <li>{{ item }}</li>
-        {% endfor %}
-      </ol>
-    </section>
-  {% endif %}
 {% endblock %}

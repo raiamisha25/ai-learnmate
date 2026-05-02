@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block title %}Learning Guide{% endblock %}
+
+{% block content %}
+  <section class="page-header">
+    <p class="eyebrow">Learning Guide</p>
+    <h1>{{ result.topic }}</h1>
+    <p class="muted">Follow the steps below, then test yourself with the quiz.</p>
+  </section>
+
+  <section class="flow-stack">
+    <div class="card flow-card">
+      <div class="flow-heading">
+        <span class="flow-icon">📘</span>
+        <div>
+          <p class="eyebrow">Step 1</p>
+          <h2>Simple Explanation</h2>
+        </div>
+      </div>
+      <p class="flow-text">{{ result.summary }}</p>
+    </div>
+
+    <div class="card flow-card">
+      <div class="flow-heading">
+        <span class="flow-icon">🧭</span>
+        <div>
+          <p class="eyebrow">Step 2</p>
+          <h2>Learn This First</h2>
+        </div>
+      </div>
+
+      {% if result.before %}
+        <ul class="mini-list">
+          {% for topic in result.before[:5] %}
+            <li>{{ topic }}</li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="muted">No prerequisite topics found yet.</p>
+      {% endif %}
+    </div>
+
+    <div class="card flow-card">
+      <div class="flow-heading">
+        <span class="flow-icon">➡️</span>
+        <div>
+          <p class="eyebrow">Step 3</p>
+          <h2>Continue With</h2>
+        </div>
+      </div>
+
+      {% if result.after %}
+        <ul class="mini-list">
+          {% for topic in result.after[:5] %}
+            <li>{{ topic }}</li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="muted">No next topics found yet.</p>
+      {% endif %}
+    </div>
+
+    <div class="card flow-card">
+      <div class="flow-heading">
+        <span class="flow-icon">🧪</span>
+        <div>
+          <p class="eyebrow">Step 4</p>
+          <h2>Test Yourself</h2>
+        </div>
+      </div>
+
+      {% if result.quiz %}
+        <p class="muted">Your quiz is ready. Answer one question at a time and check your score.</p>
+        <a class="button" href="{{ url_for('quiz') }}">Start Quiz</a>
+      {% else %}
+        <p class="muted">Quiz questions could not be generated yet. Try again after checking your API key.</p>
+      {% endif %}
+    </div>
+  </section>
+{% endblock %}
