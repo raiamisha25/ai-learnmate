@@ -26,6 +26,11 @@ if not GEMINI_API_KEY:
 else:
     print("AI LearnMate startup: GEMINI_API_KEY loaded")
 
+try:
+    client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+except Exception:
+    client = None
+
 NEO4J_URI = os.getenv("NEO4J_URI", "bolt://localhost:7687")
 NEO4J_USERNAME = os.getenv("NEO4J_USERNAME", "neo4j")
 NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "whatif@12")
@@ -67,10 +72,7 @@ def check_neo4j_connection():
 
 
 def get_gemini_client():
-    if not GEMINI_API_KEY:
-        return None
-
-    return genai.Client(api_key=GEMINI_API_KEY)
+    return client
 
 
 def friendly_ai_error(error_text):
@@ -78,30 +80,46 @@ def friendly_ai_error(error_text):
 
     if "timeout" in error_text or "timed out" in error_text:
         return "Request timed out. Try again."
-    if "api key" in error_text or "permission" in error_text or "unauthorized" in error_text:
+    if (
+        "api key" in error_text
+        or "expired" in error_text
+        or "permission" in error_text
+        or "unauthorized" in error_text
+        or "authentication" in error_text
+    ):
         return "AI service is temporarily unavailable. Please check your Gemini API key."
-    if "network" in error_text or "connection" in error_text or "connect" in error_text:
+    if "quota" in error_text or "resource_exhausted" in error_text or "429" in error_text:
+        return "AI service quota exceeded. Please try again later."
+    if (
+        "network" in error_text
+        or "connection" in error_text
+        or "connect" in error_text
+        or "dns" in error_text
+        or "resolve" in error_text
+        or "ssl" in error_text
+    ):
         return "Could not connect to AI service."
 
     return "AI service is temporarily unavailable. Please check your Gemini API key."
 
 
 def safe_generate(prompt, timeout_seconds=20):
-    client = get_gemini_client()
-
     if not client:
         return None, "AI service is temporarily unavailable. Please check your Gemini API key."
 
+    def call_gemini():
+        response = client.models.generate_content(
+            model="gemini-1.5-flash",
+            contents=prompt,
+        )
+        return response.text
+
     executor = ThreadPoolExecutor(max_workers=1)
-    future = executor.submit(
-        client.models.generate_content,
-        model="gemini-1.5-flash",
-        contents=prompt,
-    )
+    future = executor.submit(call_gemini)
 
     try:
-        response = future.result(timeout=timeout_seconds)
-        return response.text, None
+        response_text = future.result(timeout=timeout_seconds)
+        return response_text, None
     except TimeoutError:
         future.cancel()
         return None, "Request timed out. Try again."
@@ -109,6 +127,18 @@ def safe_generate(prompt, timeout_seconds=20):
         return None, friendly_ai_error(str(exc))
     finally:
         executor.shutdown(wait=False, cancel_futures=True)
+
+
+def check_gemini_startup():
+    if not GEMINI_API_KEY:
+        return
+
+    response_text, error = safe_generate("Say OK.", timeout_seconds=8)
+
+    if error:
+        print(f"Gemini startup check failed: {error}")
+    elif response_text:
+        print("Gemini connection successful")
 
 
 def extract_text_from_pdf(filepath):
@@ -827,6 +857,9 @@ def topic():
         return render_template("result.html", result=result)
 
     return render_template("topic_input.html")
+
+
+check_gemini_startup()
 
 
 if __name__ == "__main__":
