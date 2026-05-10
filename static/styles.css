@@ -340,11 +340,15 @@ button:hover {
 }
 
 .loading {
-  display: flex;
+  display: none;
   align-items: center;
   gap: 10px;
   margin-top: 18px;
   color: var(--muted);
+}
+
+.loading.active {
+  display: flex;
 }
 
 .spinner {

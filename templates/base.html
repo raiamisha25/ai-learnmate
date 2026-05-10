@@ -23,23 +23,34 @@
     </main>
 
     <script>
-      const uploadForm = document.getElementById("upload-form");
-      const loading = document.getElementById("loading");
+      function bindLoadingForm(formId) {
+        const form = document.getElementById(formId);
+        const loader = document.getElementById("loading");
 
-      if (uploadForm && loading) {
-        uploadForm.addEventListener("submit", () => {
-          loading.hidden = false;
+        if (!form || !loader) {
+          return;
+        }
+
+        const submitButton = form.querySelector("button[type='submit']");
+
+        window.addEventListener("load", () => {
+          loader.classList.remove("active");
+          if (submitButton) {
+            submitButton.disabled = false;
+          }
+        });
+
+        form.addEventListener("submit", () => {
+          loader.classList.add("active");
+          if (submitButton) {
+            submitButton.disabled = true;
+            submitButton.textContent = "Analyzing...";
+          }
         });
       }
 
-      const topicForm = document.getElementById("topic-form");
-      const topicLoading = document.getElementById("topic-loading");
-
-      if (topicForm && topicLoading) {
-        topicForm.addEventListener("submit", () => {
-          topicLoading.hidden = false;
-        });
-      }
+      bindLoadingForm("upload-form");
+      bindLoadingForm("topic-form");
     </script>
   </body>
 </html>

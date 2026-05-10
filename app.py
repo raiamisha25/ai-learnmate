@@ -1,6 +1,7 @@
 import json
 import os
 import re
+from concurrent.futures import ThreadPoolExecutor, TimeoutError
 
 import fitz
 import networkx as nx
@@ -19,6 +20,11 @@ UPLOAD_FOLDER = "uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
+if not GEMINI_API_KEY:
+    print("WARNING: GEMINI_API_KEY missing")
+else:
+    print("AI LearnMate startup: GEMINI_API_KEY loaded")
 
 NEO4J_URI = os.getenv("NEO4J_URI", "bolt://localhost:7687")
 NEO4J_USERNAME = os.getenv("NEO4J_USERNAME", "neo4j")
@@ -67,6 +73,44 @@ def get_gemini_client():
     return genai.Client(api_key=GEMINI_API_KEY)
 
 
+def friendly_ai_error(error_text):
+    error_text = (error_text or "").lower()
+
+    if "timeout" in error_text or "timed out" in error_text:
+        return "Request timed out. Try again."
+    if "api key" in error_text or "permission" in error_text or "unauthorized" in error_text:
+        return "AI service is temporarily unavailable. Please check your Gemini API key."
+    if "network" in error_text or "connection" in error_text or "connect" in error_text:
+        return "Could not connect to AI service."
+
+    return "AI service is temporarily unavailable. Please check your Gemini API key."
+
+
+def safe_generate(prompt, timeout_seconds=20):
+    client = get_gemini_client()
+
+    if not client:
+        return None, "AI service is temporarily unavailable. Please check your Gemini API key."
+
+    executor = ThreadPoolExecutor(max_workers=1)
+    future = executor.submit(
+        client.models.generate_content,
+        model="gemini-1.5-flash",
+        contents=prompt,
+    )
+
+    try:
+        response = future.result(timeout=timeout_seconds)
+        return response.text, None
+    except TimeoutError:
+        future.cancel()
+        return None, "Request timed out. Try again."
+    except Exception as exc:
+        return None, friendly_ai_error(str(exc))
+    finally:
+        executor.shutdown(wait=False, cancel_futures=True)
+
+
 def extract_text_from_pdf(filepath):
     text = ""
 
@@ -78,11 +122,6 @@ def extract_text_from_pdf(filepath):
 
 
 def summarize_text(text):
-    client = get_gemini_client()
-
-    if not client:
-        return "API key is missing. Please add GEMINI_API_KEY to your .env file."
-
     prompt = f"""
 Summarize the following PDF text in simple terms.
 Use short paragraphs and bullet points where helpful.
@@ -90,15 +129,12 @@ Use short paragraphs and bullet points where helpful.
 PDF text:
 {text[:8000]}
 """
+    response_text, error = safe_generate(prompt)
 
-    try:
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt,
-        )
-        return response.text or "Gemini did not return a summary."
-    except Exception as exc:
-        return f"Error during summarization: {exc}"
+    if error:
+        return error
+
+    return response_text or "Could not process response."
 
 
 def clean_json_text(text):
@@ -118,12 +154,24 @@ def clean_json_text(text):
     return text
 
 
+def clean_json_object_text(text):
+    text = text.strip()
+
+    if text.startswith("```"):
+        text = re.sub(r"^```json\s*", "", text)
+        text = re.sub(r"^```\s*", "", text)
+        text = re.sub(r"\s*```$", "", text)
+
+    start = text.find("{")
+    end = text.rfind("}")
+
+    if start != -1 and end != -1:
+        return text[start : end + 1]
+
+    return text
+
+
 def generate_quiz(topic, context_text=None):
-    client = get_gemini_client()
-
-    if not client:
-        return []
-
     context = context_text or topic
     prompt = f"""
 Generate 5 multiple choice questions.
@@ -142,13 +190,13 @@ Topic:
 Context:
 {context[:5000]}
 """
+    response_text, error = safe_generate(prompt)
+
+    if error:
+        return []
 
     try:
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt,
-        )
-        questions = json.loads(clean_json_text(response.text or "[]"))
+        questions = json.loads(clean_json_text(response_text or "[]"))
     except (json.JSONDecodeError, TypeError, AttributeError):
         return []
 
@@ -168,11 +216,6 @@ Context:
 
 
 def generate_simple_explanation(topic, context_text=None):
-    client = get_gemini_client()
-
-    if not client:
-        return context_text or f"Study the main ideas of {topic} step by step."
-
     prompt = f"""
 Explain "{topic}" in simple beginner-friendly language.
 Keep it short, clear, and useful for revision.
@@ -180,15 +223,12 @@ Keep it short, clear, and useful for revision.
 Context:
 {(context_text or topic)[:5000]}
 """
+    response_text, error = safe_generate(prompt)
 
-    try:
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt,
-        )
-        return response.text or context_text or f"Study {topic} step by step."
-    except Exception:
+    if error:
         return context_text or f"Study {topic} step by step."
+
+    return response_text or context_text or f"Study {topic} step by step."
 
 
 def infer_main_topic(text):
@@ -550,11 +590,6 @@ def parse_ai_topic_suggestions(text):
 
 
 def generate_topic_suggestions_with_ai(topic):
-    client = get_gemini_client()
-
-    if not client:
-        return [], []
-
     prompt = f"""
 For the topic "{topic}", give:
 1. Prerequisites (topics to learn before)
@@ -563,15 +598,12 @@ For the topic "{topic}", give:
 Keep answers short (max 5 each).
 Use bullet points under headings "Before" and "After".
 """
+    response_text, error = safe_generate(prompt)
 
-    try:
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt,
-        )
-        return parse_ai_topic_suggestions(response.text or "")
-    except Exception:
+    if error:
         return [], []
+
+    return parse_ai_topic_suggestions(response_text or "")
 
 
 def save_topic_suggestions(topic, before, after):
@@ -622,36 +654,48 @@ def get_or_create_topic_suggestions(topic):
 
 
 def check_topic_ambiguity(topic):
-    client = get_gemini_client()
-
-    if not client:
-        return []
-
     prompt = f"""
-The topic "{topic}" can have multiple meanings. List 3 interpretations.
-If there is only one clear learning meaning, return only that one.
-Return only JSON:
-["interpretation 1", "interpretation 2", "interpretation 3"]
+The topic "{topic}" may have multiple meanings.
+
+Return JSON format:
+{{
+  "ambiguous": true,
+  "options": [
+    "option1",
+    "option2"
+  ]
+}}
+
+If topic is clearly academic and specific,
+set ambiguous=false.
 """
+    response_text, error = safe_generate(prompt)
+
+    if error:
+        return {"ambiguous": False, "options": [], "error": error}
 
     try:
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt,
-        )
-        options = json.loads(clean_json_text(response.text or "[]"))
+        data = json.loads(clean_json_object_text(response_text or "{}"))
     except (json.JSONDecodeError, TypeError, AttributeError):
-        return []
+        return {
+            "ambiguous": False,
+            "options": [],
+            "error": "Could not process response.",
+        }
 
     clean_options = []
 
-    for option in options:
+    for option in data.get("options", []):
         if isinstance(option, str):
             clean_option = clean_concept_name(option)
             if clean_option and clean_option not in clean_options:
                 clean_options.append(clean_option)
 
-    return clean_options[:3]
+    return {
+        "ambiguous": bool(data.get("ambiguous")) and len(clean_options) > 1,
+        "options": clean_options[:3],
+        "error": None,
+    }
 
 
 def process_input(topic=None, text=None):
@@ -724,8 +768,8 @@ def upload():
                 else:
                     result = process_input(text=text)
                     return render_template("result.html", result=result)
-            except Exception as exc:
-                error = f"Something went wrong: {exc}"
+            except Exception:
+                error = "Something went wrong while processing the file. Please try again."
 
     return render_template(
         "upload.html",
@@ -763,23 +807,22 @@ def topic():
                 error="Please enter a topic.",
             )
 
-        clean_topic = clean_concept_name(user_topic)
-        before, after = fetch_suggestions_for_topic(clean_topic)
+        ambiguity = check_topic_ambiguity(user_topic)
 
-        if before or after:
-            result = process_input(topic=clean_topic)
-            return render_template("result.html", result=result)
+        if ambiguity.get("error"):
+            return render_template(
+                "topic_input.html",
+                error=ambiguity["error"],
+            )
 
-        options = check_topic_ambiguity(user_topic)
-
-        if len(options) > 1:
+        if ambiguity.get("ambiguous"):
             return render_template(
                 "topic_options.html",
                 topic=user_topic,
-                options=options,
+                options=ambiguity["options"],
             )
 
-        chosen_topic = options[0] if options else user_topic
+        chosen_topic = ambiguity["options"][0] if ambiguity.get("options") else user_topic
         result = process_input(topic=chosen_topic)
         return render_template("result.html", result=result)
 
