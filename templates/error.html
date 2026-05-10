@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block title %}Something Needs Attention{% endblock %}
+
+{% block content %}
+  <section class="card empty-state">
+    <p class="eyebrow">Heads up</p>
+    <h1>Something needs attention</h1>
+    <p class="muted">{{ message }}</p>
+    <div class="actions">
+      <a class="button" href="{{ url_for('home') }}">Go Home</a>
+      <a class="button secondary" href="{{ url_for('topic') }}">Find Topic</a>
+    </div>
+  </section>
+{% endblock %}
+

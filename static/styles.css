@@ -437,6 +437,14 @@ button:hover {
   margin-top: 24px;
 }
 
+.compact-columns {
+  margin-top: 0;
+}
+
+.compact-columns h3 {
+  margin-top: 0;
+}
+
 .study-item {
   padding: 16px;
   border: 1px solid var(--line);

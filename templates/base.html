@@ -12,7 +12,7 @@
       <div class="nav-links">
         <a href="{{ url_for('home') }}">Home</a>
         <a href="{{ url_for('upload') }}">Upload</a>
-        <a href="{{ url_for('graph') }}">Learning Guide</a>
+        <a href="{{ url_for('study_path') }}">Learning Guide</a>
         <a href="{{ url_for('topic') }}">Find Topic</a>
         <a href="{{ url_for('quiz') }}">Quiz</a>
       </div>
@@ -32,11 +32,13 @@
         }
 
         const submitButton = form.querySelector("button[type='submit']");
+        const originalButtonText = submitButton ? submitButton.textContent : "";
 
         window.addEventListener("load", () => {
           loader.classList.remove("active");
           if (submitButton) {
             submitButton.disabled = false;
+            submitButton.textContent = originalButtonText;
           }
         });
 

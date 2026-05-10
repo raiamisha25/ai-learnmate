@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block title %}Learning Guide{% endblock %}
+
+{% block content %}
+  <section class="page-header">
+    <p class="eyebrow">Learning Guide</p>
+    <h1>Your saved study paths</h1>
+    <p class="muted">Review topics that were already saved, then continue learning from there.</p>
+  </section>
+
+  {% if neo4j_status and not neo4j_status.connected %}
+    <div class="message warning">{{ neo4j_status.message }}</div>
+  {% endif %}
+
+  {% if suggestions %}
+    <section class="flow-stack">
+      {% for topic, items in suggestions.items() %}
+        <div class="card flow-card">
+          <div>
+            <p class="eyebrow">Topic</p>
+            <h2>{{ topic }}</h2>
+          </div>
+
+          <div class="learning-columns compact-columns">
+            <div>
+              <h3>Learn This First</h3>
+              {% if items.before %}
+                <ul class="mini-list">
+                  {% for before_topic in items.before[:5] %}
+                    <li>{{ before_topic }}</li>
+                  {% endfor %}
+                </ul>
+              {% else %}
+                <p class="muted">No earlier topics saved yet.</p>
+              {% endif %}
+            </div>
+
+            <div>
+              <h3>Continue With</h3>
+              {% if items.after %}
+                <ul class="mini-list">
+                  {% for after_topic in items.after[:5] %}
+                    <li>{{ after_topic }}</li>
+                  {% endfor %}
+                </ul>
+              {% else %}
+                <p class="muted">No next topics saved yet.</p>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      {% endfor %}
+    </section>
+  {% else %}
+    <section class="card empty-state">
+      <h2>No saved study path yet</h2>
+      <p class="muted">Upload a PDF or search for a topic to create one.</p>
+      <div class="actions">
+        <a class="button" href="{{ url_for('upload') }}">Upload PDF</a>
+        <a class="button secondary" href="{{ url_for('topic') }}">Find Topic</a>
+      </div>
+    </section>
+  {% endif %}
+{% endblock %}
+

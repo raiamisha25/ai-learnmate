@@ -126,8 +126,11 @@
   {% else %}
     <section class="card empty-state">
       <h2>No quiz yet</h2>
-      <p>Upload and summarize a PDF first. Multiple choice questions will appear here after they are generated.</p>
-      <a class="button" href="{{ url_for('upload') }}">Upload PDF</a>
+      <p>Upload a PDF or search for a topic first. Multiple choice questions will appear here after they are generated.</p>
+      <div class="actions">
+        <a class="button" href="{{ url_for('upload') }}">Upload PDF</a>
+        <a class="button secondary" href="{{ url_for('topic') }}">Find Topic</a>
+      </div>
     </section>
   {% endif %}
 {% endblock %}
