@@ -39,11 +39,13 @@ set ambiguous=false.
     response_text, error = safe_generate(prompt)
 
     if error:
+        print(f"Ambiguity detection failed for '{topic}': {error}")
         return fallback_ambiguity(topic)
 
     try:
         data = json.loads(clean_json_object_text(response_text or "{}"))
-    except (json.JSONDecodeError, TypeError, AttributeError):
+    except (json.JSONDecodeError, TypeError, AttributeError) as exc:
+        print(f"Ambiguity detection failed for '{topic}': could not parse JSON: {exc}")
         return fallback_ambiguity(topic)
 
     clean_options = []

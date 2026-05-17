@@ -8,6 +8,7 @@ from auth.helpers import load_logged_in_user
 from database.db import init_db
 from routes.main_routes import register_routes
 from services.gemini_service import check_gemini_startup
+from services.neo4j_service import check_neo4j_connection
 from utils.error_handlers import register_error_handlers
 from utils.template_filters import nl2br
 
@@ -34,6 +35,11 @@ def create_app():
 
 app = create_app()
 check_gemini_startup()
+neo4j_startup_status = check_neo4j_connection()
+if neo4j_startup_status.get("connected"):
+    print("[OK] Neo4j connected")
+else:
+    print(f"[ERROR] Neo4j unavailable: {neo4j_startup_status.get('message')}")
 
 
 if __name__ == "__main__":

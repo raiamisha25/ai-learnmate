@@ -28,7 +28,8 @@ def check_neo4j_connection():
             driver.verify_connectivity()
 
         neo4j_status.update({"connected": True, "message": "Connected to Neo4j."})
-    except Exception:
+    except Exception as exc:
+        print(f"Neo4j connection failed: {exc}")
         neo4j_status.update(
             {
                 "connected": False,
@@ -109,7 +110,8 @@ def save_graph_to_neo4j(graph_data):
                     )
 
         neo4j_status.update({"connected": True, "message": "Learning path saved."})
-    except Exception:
+    except Exception as exc:
+        print(f"Could not save graph to Neo4j: {exc}")
         neo4j_status.update(
             {
                 "connected": False,
@@ -167,7 +169,8 @@ def fetch_graph_from_neo4j():
 
         neo4j_status.update({"connected": True, "message": "Learning path loaded."})
         return graph_data
-    except Exception:
+    except Exception as exc:
+        print(f"Could not load graph from Neo4j: {exc}")
         neo4j_status.update(
             {
                 "connected": False,
@@ -227,7 +230,8 @@ def fetch_topic_suggestions():
                         }
 
         return suggestions or build_local_topic_suggestions()
-    except Exception:
+    except Exception as exc:
+        print(f"Could not fetch topic suggestions from Neo4j: {exc}")
         return build_local_topic_suggestions()
 
 
@@ -257,7 +261,8 @@ def fetch_suggestions_for_topic(topic):
         before = clean_topic_list(record["before_topics"])
         after = clean_topic_list(record["after_topics"])
         return before, after
-    except Exception:
+    except Exception as exc:
+        print(f"Could not fetch suggestions for topic '{topic}' from Neo4j: {exc}")
         return [], []
 
 
@@ -290,5 +295,5 @@ def save_topic_suggestions(topic, before, after):
                         topic=topic,
                         after_topic=after_topic,
                     )
-    except Exception:
-        pass
+    except Exception as exc:
+        print(f"Could not save topic suggestions to Neo4j for '{topic}': {exc}")

@@ -27,11 +27,13 @@ Context:
     response_text, error = safe_generate(prompt)
 
     if error:
+        print(f"Quiz generation failed: {error}")
         return []
 
     try:
         questions = json.loads(clean_json_text(response_text or "[]"))
-    except (json.JSONDecodeError, TypeError, AttributeError):
+    except (json.JSONDecodeError, TypeError, AttributeError) as exc:
+        print(f"Quiz generation failed: could not parse Gemini JSON response: {exc}")
         return []
 
     valid_questions = []
@@ -53,5 +55,8 @@ Context:
                     "difficulty": difficulty,
                 }
             )
+
+    if not valid_questions:
+        print("Quiz generation failed: Gemini response did not contain valid MCQs.")
 
     return valid_questions[:5]

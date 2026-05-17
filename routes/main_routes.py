@@ -142,7 +142,8 @@ def register_routes(app):
                     return render_template("result.html", result=result)
                 except AppError as exc:
                     error = exc.message
-                except Exception:
+                except Exception as exc:
+                    print(f"PDF upload processing failed: {exc}")
                     error = "Something went wrong while processing the file. Please try again."
 
         return render_template(

@@ -27,9 +27,14 @@ PDF text:
     response_text, error = safe_generate(prompt)
 
     if error:
+        print(f"Summary generation failed: {error}")
         return error
 
-    return response_text or "Could not process response."
+    if not response_text:
+        print("Summary generation failed: Gemini returned an empty response.")
+        return "Gemini returned an empty response. Please try again."
+
+    return response_text
 
 
 def generate_simple_explanation(topic, context_text=None):
@@ -43,9 +48,14 @@ Context:
     response_text, error = safe_generate(prompt)
 
     if error:
+        print(f"Simple explanation generation failed for '{topic}': {error}")
         return context_text or f"Study {topic} step by step."
 
-    return response_text or context_text or f"Study {topic} step by step."
+    if not response_text:
+        print(f"Simple explanation generation failed for '{topic}': empty AI response")
+        return context_text or f"Study {topic} step by step."
+
+    return response_text
 
 
 def parse_ai_topic_suggestions(text):
@@ -86,9 +96,29 @@ Use bullet points under headings "Before" and "After".
     response_text, error = safe_generate(prompt)
 
     if error:
+        print(f"Topic suggestions generation failed for '{topic}': {error}")
+        return [], []
+
+    if not response_text:
+        print(f"Topic suggestions generation failed for '{topic}': empty AI response")
         return [], []
 
     return parse_ai_topic_suggestions(response_text or "")
+
+
+def generate_topic_plan(topic, context_text=None):
+    """Generate the main parts of a study plan with visible fallback logging."""
+    try:
+        summary = generate_simple_explanation(topic, context_text)
+        _clean_topic, before, after = get_or_create_topic_suggestions(topic)
+        return {"summary": summary, "before": before, "after": after}
+    except Exception as exc:
+        print(f"Topic plan generation failed for '{topic}': {exc}")
+        return {
+            "summary": context_text or f"Study {topic} step by step.",
+            "before": [],
+            "after": [],
+        }
 
 
 def get_or_create_topic_suggestions(topic):
@@ -142,4 +172,3 @@ def process_input(topic=None, text=None):
     latest_result.update(result)
 
     return result
-
