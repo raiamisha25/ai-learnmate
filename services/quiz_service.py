@@ -6,13 +6,15 @@ from services.gemini_service import clean_json_text, safe_generate
 def generate_quiz(topic, context_text=None):
     context = context_text or topic
     prompt = f"""
-Generate 5 multiple choice questions.
+Generate 5 multiple choice questions for a beginner learning app.
 Format strictly as JSON:
 [
   {{
     "question": "...",
     "options": ["A", "B", "C", "D"],
-    "answer": "correct option"
+    "answer": "correct option",
+    "explanation": "one short reason why the answer is correct",
+    "difficulty": "easy"
   }}
 ]
 
@@ -38,11 +40,18 @@ Context:
         question = item.get("question")
         options = item.get("options", [])
         answer = item.get("answer")
+        explanation = item.get("explanation") or "Review this idea in the learning guide."
+        difficulty = item.get("difficulty") or "easy"
 
         if question and len(options) == 4 and answer in options:
             valid_questions.append(
-                {"question": question, "options": options, "answer": answer}
+                {
+                    "question": question,
+                    "options": options,
+                    "answer": answer,
+                    "explanation": explanation,
+                    "difficulty": difficulty,
+                }
             )
 
     return valid_questions[:5]
-

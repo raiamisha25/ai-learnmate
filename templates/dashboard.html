@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+  <section class="dashboard-layout">
+    <aside class="sidebar card">
+      <p class="eyebrow">Dashboard</p>
+      <a href="{{ url_for('dashboard') }}">Overview</a>
+      <a href="{{ url_for('history') }}">History</a>
+      <a href="{{ url_for('topic') }}">Find Topic</a>
+      <a href="{{ url_for('upload') }}">Upload PDF</a>
+      <a href="{{ url_for('leaderboard_page') }}">Leaderboard</a>
+    </aside>
+
+    <div class="dashboard-main">
+      <section class="page-header dashboard-header">
+        <div>
+          <p class="eyebrow">Personal Learning Space</p>
+          <h1>Welcome, {{ g.user.username }}</h1>
+          <p class="muted">Your progress, recent topics, and next steps are gathered here.</p>
+        </div>
+        <a class="button" href="{{ url_for('topic') }}">Study a Topic</a>
+      </section>
+
+      <section class="metric-grid">
+        <div class="card metric-card">
+          <span>Topics Studied</span>
+          <strong>{{ data.total_topics }}</strong>
+        </div>
+        <div class="card metric-card">
+          <span>Learning Streak</span>
+          <strong>{{ data.streak }} days</strong>
+        </div>
+        <div class="card metric-card">
+          <span>Quiz Accuracy</span>
+          <strong>{{ data.average_accuracy }}%</strong>
+          <div class="progress-track small">
+            <div class="progress-bar" style="width: {{ data.average_accuracy }}%"></div>
+          </div>
+        </div>
+        <div class="card metric-card">
+          <span>Completed Topics</span>
+          <strong>{{ data.completed }}</strong>
+        </div>
+      </section>
+
+      <section class="dashboard-grid">
+        <div class="card">
+          <div class="section-title">
+            <div>
+              <p class="eyebrow">Continue Learning</p>
+              <h2>Saved study plans</h2>
+            </div>
+          </div>
+          {% if data.saved_topics %}
+            <div class="study-list">
+              {% for item in data.saved_topics %}
+                <div class="study-item">
+                  <h3>{{ item.topic }}</h3>
+                  <p>{{ item.summary[:140] }}{% if item.summary|length > 140 %}...{% endif %}</p>
+                  <a class="button secondary" href="{{ url_for('quiz', topic=item.topic) }}">Practice Quiz</a>
+                </div>
+              {% endfor %}
+            </div>
+          {% else %}
+            <p class="muted">No saved topics yet. Search a topic or upload a PDF to begin.</p>
+          {% endif %}
+        </div>
+
+        <div class="card">
+          <p class="eyebrow">Recommended Next</p>
+          <h2>Your next topics</h2>
+          {% if data.recommended %}
+            <ul class="mini-list">
+              {% for topic in data.recommended %}
+                <li>{{ topic }}</li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <p class="muted">Recommendations will appear after you create a learning guide.</p>
+          {% endif %}
+
+          <div class="score-ring" style="--score: {{ data.average_accuracy }}%">
+            <span>{{ data.average_accuracy }}%</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="dashboard-grid">
+        <div class="card">
+          <p class="eyebrow">Weak Topics</p>
+          <h2>Review these</h2>
+          {% if data.weak_topics %}
+            <ul class="mini-list">
+              {% for item in data.weak_topics %}
+                <li>{{ item.topic }} - {{ item.average_score }}%</li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <p class="muted">No weak topics yet. Take quizzes to build your profile.</p>
+          {% endif %}
+        </div>
+
+        <div class="card">
+          <p class="eyebrow">Recent Activity</p>
+          <h2>Timeline</h2>
+          {% if data.recent_history %}
+            <ol class="timeline">
+              {% for item in data.recent_history %}
+                <li>
+                  <strong>{{ item.topic or item.action_type.replace('_', ' ').title() }}</strong>
+                  <span>{{ item.details or item.action_type.replace('_', ' ').title() }}</span>
+                </li>
+              {% endfor %}
+            </ol>
+          {% else %}
+            <p class="muted">Your learning activity will appear here.</p>
+          {% endif %}
+        </div>
+      </section>
+    </div>
+  </section>
+{% endblock %}
+

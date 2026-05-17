@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block title %}Login{% endblock %}
+
+{% block content %}
+  <section class="auth-shell">
+    <div class="card auth-card">
+      <p class="eyebrow">Welcome back</p>
+      <h1>Login to AI LearnMate</h1>
+      <p class="muted">Continue your study path, quiz progress, and saved topics.</p>
+
+      <form class="topic-form" method="POST">
+        <label for="email">Email</label>
+        <input id="email" name="email" type="email" placeholder="you@example.com" required>
+
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" placeholder="Your password" required>
+
+        <label class="check-row">
+          <input name="remember" type="checkbox">
+          <span>Remember me</span>
+        </label>
+
+        <button type="submit">Login</button>
+      </form>
+
+      {% if error %}
+        <div class="message error">{{ error }}</div>
+      {% endif %}
+
+      <p class="muted auth-switch">New here? <a href="{{ url_for('signup') }}">Create an account</a></p>
+    </div>
+  </section>
+{% endblock %}
+

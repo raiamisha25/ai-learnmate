@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block title %}Learning History{% endblock %}
+
+{% block content %}
+  <section class="page-header">
+    <p class="eyebrow">History</p>
+    <h1>Your learning timeline</h1>
+    <p class="muted">Reopen topics, review quiz attempts, and continue from where you stopped.</p>
+  </section>
+
+  <section class="dashboard-grid">
+    <div class="card">
+      <p class="eyebrow">Recent Activity</p>
+      <h2>Timeline</h2>
+      {% if data.recent_history %}
+        <ol class="timeline">
+          {% for item in data.recent_history %}
+            <li>
+              <strong>{{ item.topic or item.action_type.replace('_', ' ').title() }}</strong>
+              <span>{{ item.details or item.action_type.replace('_', ' ').title() }}</span>
+            </li>
+          {% endfor %}
+        </ol>
+      {% else %}
+        <p class="muted">No activity yet.</p>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <p class="eyebrow">Quiz Attempts</p>
+      <h2>Scores</h2>
+      {% if data.quiz_attempts %}
+        <div class="study-list">
+          {% for attempt in data.quiz_attempts %}
+            <div class="study-item">
+              <h3>{{ attempt.topic }}</h3>
+              <p>Score: {{ attempt.score }}/{{ attempt.total }} - {{ attempt.accuracy }}%</p>
+              <div class="progress-track small">
+                <div class="progress-bar" style="width: {{ attempt.accuracy }}%"></div>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="muted">No quizzes attempted yet.</p>
+      {% endif %}
+    </div>
+  </section>
+{% endblock %}
+

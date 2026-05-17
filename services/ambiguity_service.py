@@ -5,7 +5,7 @@ from services.gemini_service import clean_json_object_text, safe_generate
 
 
 DEFAULT_AMBIGUOUS_TOPICS = {
-    "tree": ["Data Structure Tree", "Biological Tree", "Decision Tree"],
+    "tree": ["Binary Tree", "AVL Tree", "Decision Tree", "Biological Tree"],
     "python": ["Python Programming", "Python Snake", "Python Data Analysis"],
     "java": ["Java Programming", "Java Island", "Java Coffee"],
 }
@@ -62,4 +62,3 @@ set ambiguous=false.
         "options": clean_options[:1] or [clean_concept_name(topic)],
         "error": None,
     }
-

@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block title %}Leaderboard{% endblock %}
+
+{% block content %}
+  <section class="page-header">
+    <p class="eyebrow">Leaderboard</p>
+    <h1>Top quiz scores</h1>
+    <p class="muted">Friendly motivation from recent quiz attempts.</p>
+  </section>
+
+  <section class="card">
+    {% if leaders %}
+      <div class="leaderboard-list">
+        {% for leader in leaders %}
+          <div class="leaderboard-row">
+            <strong>{{ loop.index }}. {{ leader.username }}</strong>
+            <span>{{ leader.topic }}</span>
+            <b>{{ leader.accuracy }}%</b>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="muted">No quiz attempts yet. Be the first to appear here.</p>
+    {% endif %}
+  </section>
+{% endblock %}
+

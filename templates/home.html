@@ -13,6 +13,9 @@
       <div class="actions">
         <a class="button" href="{{ url_for('upload') }}">Upload PDF</a>
         <a class="button secondary" href="{{ url_for('topic') }}">Find Topic</a>
+        {% if not g.user %}
+          <a class="button secondary" href="{{ url_for('signup') }}">Create Account</a>
+        {% endif %}
       </div>
     </div>
   </section>

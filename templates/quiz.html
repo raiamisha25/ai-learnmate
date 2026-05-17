@@ -4,15 +4,36 @@
 
 {% block content %}
   <section class="page-header">
-    <p class="eyebrow">Quiz</p>
+    <p class="eyebrow">Interactive Quiz</p>
     <h1>Test your understanding</h1>
-    <p class="muted">Answer one question at a time and see your score at the end.</p>
+    <p class="muted">Choose a topic, answer one question at a time, and get a personalized next step.</p>
+  </section>
+
+  {% if error %}
+    <div class="message error">{{ error }}</div>
+  {% endif %}
+
+  <section class="card quiz-start-card">
+    <form class="topic-form quiz-start-form" method="POST" action="{{ url_for('start_quiz') }}">
+      <label for="topic">Quiz topic</label>
+      <input id="topic" name="topic" type="text" value="{{ topic }}" placeholder="Example: Binary Tree">
+
+      <label for="difficulty">Difficulty</label>
+      <select id="difficulty" name="difficulty">
+        <option value="easy" {% if difficulty == "easy" %}selected{% endif %}>Easy</option>
+        <option value="medium" {% if difficulty == "medium" %}selected{% endif %}>Medium</option>
+        <option value="hard" {% if difficulty == "hard" %}selected{% endif %}>Hard</option>
+      </select>
+
+      <button type="submit">Generate Quiz</button>
+    </form>
   </section>
 
   {% if quiz %}
-    <section class="quiz-shell card">
+    <section id="quiz-shell" class="quiz-shell card" data-topic="{{ topic }}" data-difficulty="{{ difficulty }}">
       <div class="quiz-topline">
         <span id="progress-text">Question 1 of {{ quiz|length }}</span>
+        <span id="timer-text">05:00</span>
         <span id="score-text">Score: 0</span>
       </div>
 
@@ -20,31 +41,89 @@
         <div id="progress-bar" class="progress-bar"></div>
       </div>
 
-      <h2 id="question-text"></h2>
-
-      <div id="options-list" class="options-list"></div>
+      <div class="question-card">
+        <h2 id="question-text"></h2>
+        <div id="options-list" class="options-list"></div>
+      </div>
 
       <p id="feedback" class="feedback"></p>
 
       <div class="quiz-actions">
         <button id="next-button" type="button" hidden>Next Question</button>
+        <button id="review-button" class="button secondary" type="button" hidden>Review Answers</button>
         <button id="retry-button" class="button secondary" type="button" hidden>Take Quiz Again</button>
       </div>
-    </section>
 
+      <div id="review-panel" class="review-panel" hidden></div>
+      <div id="confetti" class="confetti" hidden></div>
+    </section>
+  {% else %}
+    <section class="card empty-state">
+      <h2>No quiz loaded yet</h2>
+      <p>Enter a topic above or create a learning guide from a PDF first.</p>
+    </section>
+  {% endif %}
+
+  <section class="card leaderboard-card">
+    <p class="eyebrow">Leaderboard</p>
+    <h2>Recent top scores</h2>
+    {% if leaderboard %}
+      <div class="leaderboard-list">
+        {% for leader in leaderboard %}
+          <div class="leaderboard-row">
+            <strong>{{ leader.username }}</strong>
+            <span>{{ leader.topic }}</span>
+            <b>{{ leader.accuracy }}%</b>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="muted">Leaderboard scores will appear after learners complete quizzes.</p>
+    {% endif %}
+  </section>
+
+  {% if quiz %}
     <script>
       const quiz = {{ quiz | tojson }};
+      const quizShell = document.getElementById("quiz-shell");
       let currentQuestion = 0;
       let score = 0;
+      let answers = [];
+      let secondsLeft = 300;
+      let quizFinished = false;
 
       const progressText = document.getElementById("progress-text");
       const scoreText = document.getElementById("score-text");
+      const timerText = document.getElementById("timer-text");
       const progressBar = document.getElementById("progress-bar");
       const questionText = document.getElementById("question-text");
       const optionsList = document.getElementById("options-list");
       const feedback = document.getElementById("feedback");
       const nextButton = document.getElementById("next-button");
       const retryButton = document.getElementById("retry-button");
+      const reviewButton = document.getElementById("review-button");
+      const reviewPanel = document.getElementById("review-panel");
+      const confetti = document.getElementById("confetti");
+
+      function formatTime(totalSeconds) {
+        const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, "0");
+        const seconds = String(totalSeconds % 60).padStart(2, "0");
+        return `${minutes}:${seconds}`;
+      }
+
+      const timer = setInterval(() => {
+        if (quizFinished) {
+          clearInterval(timer);
+          return;
+        }
+
+        secondsLeft -= 1;
+        timerText.textContent = formatTime(secondsLeft);
+
+        if (secondsLeft <= 0) {
+          showFinalScore();
+        }
+      }, 1000);
 
       function showQuestion() {
         const question = quiz[currentQuestion];
@@ -57,35 +136,37 @@
         feedback.className = "feedback";
         nextButton.hidden = true;
         optionsList.innerHTML = "";
+        reviewPanel.hidden = true;
 
         question.options.forEach((option) => {
           const button = document.createElement("button");
           button.type = "button";
-          button.className = "option-button";
+          button.className = "option-button animated-option";
           button.textContent = option;
-          button.addEventListener("click", () => checkAnswer(button, option, question.answer));
+          button.addEventListener("click", () => checkAnswer(button, option, question));
           optionsList.appendChild(button);
         });
       }
 
-      function checkAnswer(selectedButton, selectedOption, correctAnswer) {
+      function checkAnswer(selectedButton, selectedOption, question) {
         const optionButtons = document.querySelectorAll(".option-button");
+        answers[currentQuestion] = selectedOption;
 
         optionButtons.forEach((button) => {
           button.disabled = true;
 
-          if (button.textContent === correctAnswer) {
+          if (button.textContent === question.answer) {
             button.classList.add("correct");
           }
         });
 
-        if (selectedOption === correctAnswer) {
+        if (selectedOption === question.answer) {
           score += 1;
-          feedback.textContent = "Correct";
+          feedback.textContent = `Correct. ${question.explanation || ""}`;
           feedback.classList.add("correct-text");
         } else {
           selectedButton.classList.add("wrong");
-          feedback.textContent = `Wrong. Correct answer: ${correctAnswer}`;
+          feedback.textContent = `Wrong. Correct answer: ${question.answer}. ${question.explanation || ""}`;
           feedback.classList.add("wrong-text");
         }
 
@@ -93,15 +174,66 @@
         nextButton.hidden = false;
       }
 
-      function showFinalScore() {
+      async function saveResult() {
+        const response = await fetch("{{ url_for('submit_quiz') }}", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({
+            topic: quizShell.dataset.topic,
+            answers: answers,
+            difficulty: quizShell.dataset.difficulty || "easy"
+          })
+        });
+
+        return response.json();
+      }
+
+      async function showFinalScore() {
+        if (quizFinished) {
+          return;
+        }
+
+        quizFinished = true;
+        clearInterval(timer);
         progressText.textContent = `Question ${quiz.length} of ${quiz.length}`;
         progressBar.style.width = "100%";
-        questionText.textContent = `You scored ${score} / ${quiz.length}`;
         optionsList.innerHTML = "";
-        feedback.textContent = "Great work. Review the learning guide, then try again to improve your score.";
-        feedback.className = "feedback";
         nextButton.hidden = true;
         retryButton.hidden = false;
+        reviewButton.hidden = false;
+
+        const result = await saveResult();
+        const message = result.accuracy >= 80
+          ? "Great work. Next topics are unlocked."
+          : result.accuracy < 50
+            ? "Review prerequisites, then try again."
+            : "Good progress. A practice quiz will help lock this in.";
+
+        questionText.textContent = `You scored ${score} / ${quiz.length}`;
+        feedback.textContent = `${result.accuracy}% accuracy. ${message}`;
+        feedback.className = "feedback correct-text";
+
+        if (result.accuracy >= 80) {
+          confetti.hidden = false;
+          confetti.textContent = "Great work!";
+        }
+      }
+
+      function showReview() {
+        reviewPanel.hidden = false;
+        reviewPanel.innerHTML = "<h3>Review Answers</h3>";
+
+        quiz.forEach((question, index) => {
+          const item = document.createElement("div");
+          item.className = "review-item";
+          item.innerHTML = `
+            <strong>${index + 1}. ${question.question}</strong>
+            <p>Your answer: ${answers[index] || "No answer"}</p>
+            <p>Correct answer: ${question.answer}</p>
+            <p>${question.explanation || "Review this topic in your guide."}</p>
+          `;
+          reviewPanel.appendChild(item);
+        });
       }
 
       nextButton.addEventListener("click", () => {
@@ -114,23 +246,11 @@
         }
       });
 
-      retryButton.addEventListener("click", () => {
-        currentQuestion = 0;
-        score = 0;
-        retryButton.hidden = true;
-        showQuestion();
-      });
+      retryButton.addEventListener("click", () => window.location.reload());
+      reviewButton.addEventListener("click", showReview);
 
+      timerText.textContent = formatTime(secondsLeft);
       showQuestion();
     </script>
-  {% else %}
-    <section class="card empty-state">
-      <h2>No quiz yet</h2>
-      <p>Upload a PDF or search for a topic first. Multiple choice questions will appear here after they are generated.</p>
-      <div class="actions">
-        <a class="button" href="{{ url_for('upload') }}">Upload PDF</a>
-        <a class="button secondary" href="{{ url_for('topic') }}">Find Topic</a>
-      </div>
-    </section>
   {% endif %}
 {% endblock %}

@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block title %}Sign Up{% endblock %}
+
+{% block content %}
+  <section class="auth-shell">
+    <div class="card auth-card">
+      <p class="eyebrow">Start learning</p>
+      <h1>Create your account</h1>
+      <p class="muted">Save your study plans, track quiz progress, and get smarter recommendations.</p>
+
+      <form class="topic-form" method="POST">
+        <label for="username">Username</label>
+        <input id="username" name="username" type="text" placeholder="Your name" required>
+
+        <label for="email">Email</label>
+        <input id="email" name="email" type="email" placeholder="you@example.com" required>
+
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" placeholder="At least 6 characters" required>
+
+        <button type="submit">Create Account</button>
+      </form>
+
+      {% if error %}
+        <div class="message error">{{ error }}</div>
+      {% endif %}
+
+      <p class="muted auth-switch">Already have an account? <a href="{{ url_for('login') }}">Login</a></p>
+    </div>
+  </section>
+{% endblock %}
+

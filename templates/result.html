@@ -72,7 +72,7 @@
 
       {% if result.quiz %}
         <p class="muted">Your quiz is ready. Answer one question at a time and check your score.</p>
-        <a class="button" href="{{ url_for('quiz') }}">Start Quiz</a>
+        <a class="button" href="{{ url_for('quiz', topic=result.topic) }}">Start Quiz</a>
       {% else %}
         <p class="muted">Quiz questions could not be generated yet. Try again after checking your API key.</p>
       {% endif %}
