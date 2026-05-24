@@ -169,6 +169,15 @@ def save_study_plan(user_id, result):
     if not user_id or not result:
         return
 
+    def topic_lines(items):
+        lines = []
+        for item in items or []:
+            if isinstance(item, dict):
+                lines.append(item.get("topic", ""))
+            else:
+                lines.append(str(item))
+        return "\n".join(line for line in lines if line)
+
     run_query(
         """
         INSERT INTO saved_topics
@@ -184,8 +193,8 @@ def save_study_plan(user_id, result):
             user_id,
             result.get("topic"),
             result.get("summary"),
-            "\n".join(result.get("before", [])),
-            "\n".join(result.get("after", [])),
+            topic_lines(result.get("before", [])),
+            topic_lines(result.get("after", [])),
             now_text(),
         ),
         commit=True,

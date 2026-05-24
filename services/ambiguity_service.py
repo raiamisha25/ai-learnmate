@@ -1,14 +1,23 @@
 import json
 
-from services.concept_service import clean_concept_name
-from services.gemini_service import clean_json_object_text, safe_generate
+from services.groq_service import safe_groq_generate
+from utils.topic_validator import normalize_topic_name
 
 
 DEFAULT_AMBIGUOUS_TOPICS = {
     "tree": ["Binary Tree", "AVL Tree", "Decision Tree", "Biological Tree"],
-    "python": ["Python Programming", "Python Snake", "Python Data Analysis"],
-    "java": ["Java Programming", "Java Island", "Java Coffee"],
+    "python": ["Python Programming", "Python Data Analysis"],
+    "java": ["Java Programming", "Java Collections"],
 }
+
+
+def clean_json_object_text(text):
+    text = (text or "").strip()
+    if text.startswith("```"):
+        text = text.replace("```json", "").replace("```", "").strip()
+    start = text.find("{")
+    end = text.rfind("}")
+    return text[start : end + 1] if start != -1 and end != -1 else text
 
 
 def fallback_ambiguity(topic):
@@ -17,26 +26,24 @@ def fallback_ambiguity(topic):
     if options:
         return {"ambiguous": True, "options": options, "error": None}
 
-    return {"ambiguous": False, "options": [clean_concept_name(topic)], "error": None}
+    return {"ambiguous": False, "options": [normalize_topic_name(topic)], "error": None}
 
 
 def check_topic_ambiguity(topic):
-    prompt = f"""
+    system_prompt = "You detect topic ambiguity for an educational learning app. Return JSON only."
+    user_prompt = f"""
 The topic "{topic}" may have multiple meanings.
 
-Return JSON format:
+Return JSON only:
 {{
   "ambiguous": true,
-  "options": [
-    "option1",
-    "option2"
-  ]
+  "options": ["specific educational meaning 1", "specific educational meaning 2"]
 }}
 
-If topic is clearly academic and specific,
-set ambiguous=false.
+If the topic is clearly academic and specific, set ambiguous=false.
+For "tree", include Binary Tree, AVL Tree, Decision Tree, and Biological Tree.
 """
-    response_text, error = safe_generate(prompt)
+    response_text, error = safe_groq_generate(system_prompt, user_prompt, max_tokens=500)
 
     if error:
         print(f"Ambiguity detection failed for '{topic}': {error}")
@@ -52,15 +59,15 @@ set ambiguous=false.
 
     for option in data.get("options", []):
         if isinstance(option, str):
-            clean_option = clean_concept_name(option)
+            clean_option = normalize_topic_name(option)
             if clean_option and clean_option not in clean_options:
                 clean_options.append(clean_option)
 
     if bool(data.get("ambiguous")) and len(clean_options) > 1:
-        return {"ambiguous": True, "options": clean_options[:3], "error": None}
+        return {"ambiguous": True, "options": clean_options[:4], "error": None}
 
     return {
         "ambiguous": False,
-        "options": clean_options[:1] or [clean_concept_name(topic)],
+        "options": clean_options[:1] or [normalize_topic_name(topic)],
         "error": None,
     }

@@ -6,7 +6,10 @@
   <section class="page-header">
     <p class="eyebrow">Learning Guide</p>
     <h1>{{ result.topic }}</h1>
-    <p class="muted">Follow the steps below, then test yourself with the quiz.</p>
+    <p class="muted">
+      {{ result.difficulty or "Beginner" }} · {{ result.estimated_time or "2-4 hours" }}
+      {% if result.cached %}· Loaded from saved roadmap{% endif %}
+    </p>
   </section>
 
   <section class="flow-stack">
@@ -19,6 +22,12 @@
         </div>
       </div>
       <p class="flow-text">{{ result.summary|nl2br }}</p>
+      {% if result.analogy %}
+        <div class="roadmap-note">
+          <strong>Real-world analogy</strong>
+          <p>{{ result.analogy }}</p>
+        </div>
+      {% endif %}
     </div>
 
     <div class="card flow-card">
@@ -31,11 +40,14 @@
       </div>
 
       {% if result.before %}
-        <ul class="mini-list">
-          {% for topic in result.before[:5] %}
-            <li>{{ topic }}</li>
+        <div class="roadmap-list">
+          {% for item in result.before[:5] %}
+            <div class="roadmap-item">
+              <strong>{{ item.topic if item.topic is defined else item }}</strong>
+              {% if item.why is defined %}<p>{{ item.why }}</p>{% endif %}
+            </div>
           {% endfor %}
-        </ul>
+        </div>
       {% else %}
         <p class="muted">No prerequisite topics found yet.</p>
       {% endif %}
@@ -51,15 +63,38 @@
       </div>
 
       {% if result.after %}
-        <ul class="mini-list">
-          {% for topic in result.after[:5] %}
-            <li>{{ topic }}</li>
+        <div class="roadmap-list">
+          {% for item in result.after[:5] %}
+            <div class="roadmap-item">
+              <strong>{{ item.topic if item.topic is defined else item }}</strong>
+              {% if item.why is defined %}<p>{{ item.why }}</p>{% endif %}
+            </div>
           {% endfor %}
-        </ul>
+        </div>
       {% else %}
         <p class="muted">No next topics found yet.</p>
       {% endif %}
     </div>
+
+    {% if result.related %}
+      <div class="card flow-card">
+        <div class="flow-heading">
+          <span class="flow-icon">+</span>
+          <div>
+            <p class="eyebrow">Helpful Connections</p>
+            <h2>Related ideas</h2>
+          </div>
+        </div>
+        <div class="roadmap-list">
+          {% for item in result.related[:5] %}
+            <div class="roadmap-item">
+              <strong>{{ item.topic }}</strong>
+              <p>{{ item.why }}</p>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    {% endif %}
 
     <div class="card flow-card">
       <div class="flow-heading">

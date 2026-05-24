@@ -26,11 +26,11 @@
             <div>
               <h3>Learn This First</h3>
               {% if items.before %}
-                <ul class="mini-list">
+                <div class="roadmap-list">
                   {% for before_topic in items.before[:5] %}
-                    <li>{{ before_topic }}</li>
+                    <div class="roadmap-item"><strong>{{ before_topic }}</strong></div>
                   {% endfor %}
-                </ul>
+                </div>
               {% else %}
                 <p class="muted">No earlier topics saved yet.</p>
               {% endif %}
@@ -39,11 +39,11 @@
             <div>
               <h3>Continue With</h3>
               {% if items.after %}
-                <ul class="mini-list">
+                <div class="roadmap-list">
                   {% for after_topic in items.after[:5] %}
-                    <li>{{ after_topic }}</li>
+                    <div class="roadmap-item"><strong>{{ after_topic }}</strong></div>
                   {% endfor %}
-                </ul>
+                </div>
               {% else %}
                 <p class="muted">No next topics saved yet.</p>
               {% endif %}
@@ -63,4 +63,3 @@
     </section>
   {% endif %}
 {% endblock %}
-

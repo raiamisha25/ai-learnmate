@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 from neo4j import GraphDatabase
 
 from models.state import knowledge_graph, neo4j_status
+from utils.topic_validator import is_valid_topic, normalize_topic_name
 
 
 load_dotenv()
@@ -41,7 +42,7 @@ def check_neo4j_connection():
 
 
 def clean_topic_list(topics):
-    return sorted({topic for topic in topics if topic})
+    return sorted({normalize_topic_name(topic) for topic in topics if topic and is_valid_topic(topic)})
 
 
 def relation_to_type(relation):
@@ -297,3 +298,123 @@ def save_topic_suggestions(topic, before, after):
                     )
     except Exception as exc:
         print(f"Could not save topic suggestions to Neo4j for '{topic}': {exc}")
+
+
+def fetch_roadmap_from_neo4j(topic):
+    try:
+        with get_neo4j_driver() as driver:
+            with driver.session() as session:
+                topic_record = session.run(
+                    """
+                    MATCH (topic:Concept)
+                    WHERE toLower(topic.name) = toLower($topic)
+                    RETURN topic.name AS topic,
+                           topic.explanation AS explanation,
+                           topic.analogy AS analogy,
+                           topic.difficulty AS difficulty,
+                           topic.estimated_time AS estimated_time
+                    LIMIT 1
+                    """,
+                    topic=topic,
+                ).single()
+
+                if not topic_record or not topic_record["explanation"]:
+                    return None
+
+                relation_records = session.run(
+                    """
+                    MATCH (topic:Concept)
+                    WHERE toLower(topic.name) = toLower($topic)
+                    OPTIONAL MATCH (pre:Concept)-[pre_rel:PREREQUISITE_OF]->(topic)
+                    OPTIONAL MATCH (topic)-[next_rel:NEXT_TOPIC]->(next:Concept)
+                    OPTIONAL MATCH (topic)-[related_rel:RELATED_TOPIC]->(related:Concept)
+                    RETURN
+                        collect(DISTINCT {topic: pre.name, why: pre_rel.why}) AS prerequisites,
+                        collect(DISTINCT {topic: next.name, why: next_rel.why}) AS next_topics,
+                        collect(DISTINCT {topic: related.name, why: related_rel.why}) AS related_topics
+                    """,
+                    topic=topic,
+                ).single()
+
+        def clean_items(items):
+            return [
+                {"topic": item["topic"], "why": item.get("why") or ""}
+                for item in items or []
+                if item.get("topic")
+            ]
+
+        return {
+            "topic": topic_record["topic"],
+            "explanation": topic_record["explanation"],
+            "analogy": topic_record["analogy"],
+            "difficulty": topic_record["difficulty"],
+            "estimated_time": topic_record["estimated_time"],
+            "prerequisites": clean_items(relation_records["prerequisites"]),
+            "next_topics": clean_items(relation_records["next_topics"]),
+            "related_topics": clean_items(relation_records["related_topics"]),
+        }
+    except Exception as exc:
+        print(f"Could not fetch roadmap for '{topic}' from Neo4j: {exc}")
+        return None
+
+
+def save_roadmap_to_neo4j(roadmap):
+    try:
+        with get_neo4j_driver() as driver:
+            with driver.session() as session:
+                session.run(
+                    """
+                    MERGE (topic:Concept {name: $topic})
+                    SET topic.explanation = $explanation,
+                        topic.analogy = $analogy,
+                        topic.difficulty = $difficulty,
+                        topic.estimated_time = $estimated_time,
+                        topic.roadmap_cached = true
+                    """,
+                    topic=roadmap["topic"],
+                    explanation=roadmap.get("explanation"),
+                    analogy=roadmap.get("analogy"),
+                    difficulty=roadmap.get("difficulty"),
+                    estimated_time=roadmap.get("estimated_time"),
+                )
+
+                for item in roadmap.get("prerequisites", []):
+                    session.run(
+                        """
+                        MERGE (pre:Concept {name: $pre})
+                        MERGE (topic:Concept {name: $topic})
+                        MERGE (pre)-[rel:PREREQUISITE_OF]->(topic)
+                        SET rel.why = $why
+                        """,
+                        pre=item["topic"],
+                        topic=roadmap["topic"],
+                        why=item.get("why"),
+                    )
+
+                for item in roadmap.get("next_topics", []):
+                    session.run(
+                        """
+                        MERGE (topic:Concept {name: $topic})
+                        MERGE (next:Concept {name: $next})
+                        MERGE (topic)-[rel:NEXT_TOPIC]->(next)
+                        SET rel.why = $why
+                        """,
+                        topic=roadmap["topic"],
+                        next=item["topic"],
+                        why=item.get("why"),
+                    )
+
+                for item in roadmap.get("related_topics", []):
+                    session.run(
+                        """
+                        MERGE (topic:Concept {name: $topic})
+                        MERGE (related:Concept {name: $related})
+                        MERGE (topic)-[rel:RELATED_TOPIC]->(related)
+                        SET rel.why = $why
+                        """,
+                        topic=roadmap["topic"],
+                        related=item["topic"],
+                        why=item.get("why"),
+                    )
+    except Exception as exc:
+        print(f"Could not save roadmap to Neo4j for '{roadmap.get('topic')}': {exc}")

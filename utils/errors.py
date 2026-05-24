@@ -11,7 +11,7 @@ def friendly_ai_error(error_text):
     text = (error_text or "").lower()
 
     if "timeout" in text or "timed out" in text:
-        return "Network timeout while contacting Gemini. Please try again."
+        return "Network timeout while contacting Groq. Please try again."
     if (
         "api key" in text
         or "expired" in text
@@ -22,9 +22,9 @@ def friendly_ai_error(error_text):
         or "400" in text
         or "403" in text
     ):
-        return "Invalid Gemini API key. Please check your GEMINI_API_KEY."
+        return "Invalid Groq API key. Please check your GROQ_API_KEY."
     if "quota" in text or "resource_exhausted" in text or "429" in text:
-        return "Gemini quota exceeded. Please try again later."
+        return "Groq quota exceeded. Please try again later."
     if (
         "network" in text
         or "connection" in text
@@ -33,10 +33,10 @@ def friendly_ai_error(error_text):
         or "resolve" in text
         or "ssl" in text
     ):
-        return "Could not connect to Gemini. Please check your internet connection."
+        return "Could not connect to Groq. Please check your internet connection."
     if "empty" in text or "none" in text:
-        return "Gemini returned an empty response. Please try again."
+        return "Groq returned an empty response. Please try again."
     if "service unavailable" in text or "503" in text or "unavailable" in text:
-        return "Gemini service is unavailable right now. Please try again soon."
+        return "Groq service is unavailable right now. Please try again soon."
 
     return "AI service unavailable. Please try again."
