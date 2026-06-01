@@ -653,7 +653,8 @@ body.dark .review-item {
 }
 
 body.dark .roadmap-note,
-body.dark .roadmap-item {
+body.dark .roadmap-item,
+body.dark .quiz-result-panel {
   background: #111827;
 }
 
@@ -688,7 +689,7 @@ body.dark .roadmap-item {
 }
 
 .quiz-start-form {
-  grid-template-columns: 1fr 180px auto;
+  grid-template-columns: 1fr 150px 150px auto;
   align-items: end;
 }
 
@@ -813,6 +814,47 @@ body.dark .roadmap-item {
   margin-top: 22px;
 }
 
+.quiz-result-panel {
+  display: grid;
+  gap: 16px;
+  margin-top: 22px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f8fbff;
+}
+
+.level-badge {
+  display: inline-flex;
+  width: fit-content;
+  padding: 10px 16px;
+  border-radius: 999px;
+  color: #ffffff;
+  background: var(--accent);
+  font-weight: 900;
+}
+
+.result-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.result-grid span {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  background: var(--card);
+}
+
+.result-grid strong {
+  color: var(--text);
+  font-size: 18px;
+}
+
 .review-item {
   padding: 14px;
   border: 1px solid var(--line);
@@ -924,6 +966,10 @@ body.dark .roadmap-item {
   }
 
   .leaderboard-row {
+    grid-template-columns: 1fr;
+  }
+
+  .result-grid {
     grid-template-columns: 1fr;
   }
 }

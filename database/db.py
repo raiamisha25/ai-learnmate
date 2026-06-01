@@ -92,6 +92,17 @@ def init_db():
                 FOREIGN KEY (user_id) REFERENCES users(id)
             );
 
+            CREATE TABLE IF NOT EXISTS user_quiz_levels (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                topic TEXT NOT NULL,
+                highest_level TEXT,
+                highest_score REAL DEFAULT 0,
+                updated_at TEXT NOT NULL,
+                UNIQUE(user_id, topic),
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            );
+
             CREATE TABLE IF NOT EXISTS user_progress (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER NOT NULL,
@@ -117,6 +128,21 @@ def init_db():
             );
             """
         )
+        ensure_column(connection, "quiz_attempts", "level", "TEXT")
+        ensure_column(connection, "quiz_attempts", "questions_attempted", "INTEGER DEFAULT 0")
+        ensure_column(connection, "quiz_attempts", "correct_answers", "INTEGER DEFAULT 0")
+        ensure_column(connection, "quiz_attempts", "duration", "INTEGER DEFAULT 0")
+        ensure_column(connection, "quiz_attempts", "funny_comment", "TEXT")
+        ensure_column(connection, "quiz_attempts", "motivational_comment", "TEXT")
+        ensure_column(connection, "quiz_attempts", "topic_joke", "TEXT")
+
+
+def ensure_column(connection, table_name, column_name, column_type):
+    columns = connection.execute(f"PRAGMA table_info({table_name})").fetchall()
+    existing = {column["name"] for column in columns}
+
+    if column_name not in existing:
+        connection.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}")
 
 
 def now_text():
@@ -221,15 +247,30 @@ def save_uploaded_pdf(user_id, filename, result):
     )
 
 
-def save_quiz_attempt(user_id, topic, score, total, difficulty, weak_topics):
+def save_quiz_attempt(
+    user_id,
+    topic,
+    score,
+    total,
+    difficulty,
+    weak_topics,
+    level=None,
+    duration=0,
+    comments=None,
+):
     accuracy = round((score / total) * 100, 2) if total else 0
     created_at = now_text()
+    comments = comments or {}
 
     run_query(
         """
         INSERT INTO quiz_attempts
-            (user_id, topic, score, total, accuracy, difficulty, weak_topics, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            (
+                user_id, topic, score, total, accuracy, difficulty, weak_topics,
+                level, questions_attempted, correct_answers, duration,
+                funny_comment, motivational_comment, topic_joke, created_at
+            )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             user_id,
@@ -239,6 +280,13 @@ def save_quiz_attempt(user_id, topic, score, total, difficulty, weak_topics):
             accuracy,
             difficulty,
             "\n".join(weak_topics),
+            level,
+            total,
+            score,
+            duration,
+            comments.get("funny_comment"),
+            comments.get("motivational_comment"),
+            comments.get("topic_joke"),
             created_at,
         ),
         commit=True,
@@ -298,6 +346,26 @@ def save_quiz_attempt(user_id, topic, score, total, difficulty, weak_topics):
     )
 
     add_history(user_id, "quiz_attempted", topic, f"Scored {score}/{total} ({accuracy}%)")
+
+    old_level = run_query(
+        "SELECT highest_score FROM user_quiz_levels WHERE user_id = ? AND topic = ?",
+        (user_id, topic),
+        fetchone=True,
+    )
+
+    if not old_level or accuracy >= old_level["highest_score"]:
+        run_query(
+            """
+            INSERT INTO user_quiz_levels (user_id, topic, highest_level, highest_score, updated_at)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(user_id, topic) DO UPDATE SET
+                highest_level = excluded.highest_level,
+                highest_score = excluded.highest_score,
+                updated_at = excluded.updated_at
+            """,
+            (user_id, topic, level, accuracy, created_at),
+            commit=True,
+        )
 
     return {
         "accuracy": accuracy,

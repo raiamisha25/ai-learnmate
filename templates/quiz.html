@@ -1,12 +1,12 @@
 {% extends "base.html" %}
 
-{% block title %}Quiz{% endblock %}
+{% block title %}Adaptive Quiz{% endblock %}
 
 {% block content %}
   <section class="page-header">
-    <p class="eyebrow">Interactive Quiz</p>
-    <h1>Test your understanding</h1>
-    <p class="muted">Choose a topic, answer one question at a time, and get a personalized next step.</p>
+    <p class="eyebrow">Quiz 2.0</p>
+    <h1>Timed adaptive quiz</h1>
+    <p class="muted">Pick a topic, difficulty, and timer. Answer as many questions as you can before time runs out.</p>
   </section>
 
   {% if error %}
@@ -15,7 +15,7 @@
 
   <section class="card quiz-start-card">
     <form class="topic-form quiz-start-form" method="POST" action="{{ url_for('start_quiz') }}">
-      <label for="topic">Quiz topic</label>
+      <label for="topic">Topic</label>
       <input id="topic" name="topic" type="text" value="{{ topic }}" placeholder="Example: Binary Tree">
 
       <label for="difficulty">Difficulty</label>
@@ -25,23 +25,38 @@
         <option value="hard" {% if difficulty == "hard" %}selected{% endif %}>Hard</option>
       </select>
 
-      <button type="submit">Generate Quiz</button>
+      <label for="duration">Time</label>
+      <select id="duration" name="duration">
+        <option value="1" {% if duration == 1 %}selected{% endif %}>1 minute</option>
+        <option value="3" {% if duration == 3 %}selected{% endif %}>3 minutes</option>
+        <option value="5" {% if duration == 5 %}selected{% endif %}>5 minutes</option>
+        <option value="10" {% if duration == 10 %}selected{% endif %}>10 minutes</option>
+      </select>
+
+      <button type="submit">Start Quiz</button>
     </form>
   </section>
 
   {% if quiz %}
-    <section id="quiz-shell" class="quiz-shell card" data-topic="{{ topic }}" data-difficulty="{{ difficulty }}">
+    <section
+      id="quiz-shell"
+      class="quiz-shell card"
+      data-topic="{{ topic }}"
+      data-difficulty="{{ difficulty }}"
+      data-duration="{{ duration }}"
+    >
       <div class="quiz-topline">
-        <span id="progress-text">Question 1 of {{ quiz|length }}</span>
-        <span id="timer-text">05:00</span>
+        <span id="timer-text">00:00</span>
         <span id="score-text">Score: 0</span>
+        <span id="attempted-text">Attempted: 0</span>
       </div>
 
       <div class="progress-track">
         <div id="progress-bar" class="progress-bar"></div>
       </div>
 
-      <div class="question-card">
+      <div id="question-card" class="question-card">
+        <p id="question-count" class="eyebrow">Question 1</p>
         <h2 id="question-text"></h2>
         <div id="options-list" class="options-list"></div>
       </div>
@@ -50,17 +65,19 @@
 
       <div class="quiz-actions">
         <button id="next-button" type="button" hidden>Next Question</button>
+        <button id="finish-button" class="button secondary" type="button">Finish Now</button>
         <button id="review-button" class="button secondary" type="button" hidden>Review Answers</button>
         <button id="retry-button" class="button secondary" type="button" hidden>Take Quiz Again</button>
       </div>
 
+      <div id="result-panel" class="quiz-result-panel" hidden></div>
       <div id="review-panel" class="review-panel" hidden></div>
       <div id="confetti" class="confetti" hidden></div>
     </section>
   {% else %}
     <section class="card empty-state">
       <h2>No quiz loaded yet</h2>
-      <p>Enter a topic above or create a learning guide from a PDF first.</p>
+      <p>Choose a topic, difficulty, and timer above to begin.</p>
     </section>
   {% endif %}
 
@@ -87,21 +104,25 @@
       const quiz = {{ quiz | tojson }};
       const quizShell = document.getElementById("quiz-shell");
       let currentQuestion = 0;
-      let score = 0;
+      let correctAnswers = 0;
       let answers = [];
-      let secondsLeft = 300;
+      let secondsLeft = Number(quizShell.dataset.duration) * 60;
+      let startingSeconds = secondsLeft;
       let quizFinished = false;
 
-      const progressText = document.getElementById("progress-text");
-      const scoreText = document.getElementById("score-text");
       const timerText = document.getElementById("timer-text");
+      const scoreText = document.getElementById("score-text");
+      const attemptedText = document.getElementById("attempted-text");
       const progressBar = document.getElementById("progress-bar");
+      const questionCount = document.getElementById("question-count");
       const questionText = document.getElementById("question-text");
       const optionsList = document.getElementById("options-list");
       const feedback = document.getElementById("feedback");
       const nextButton = document.getElementById("next-button");
+      const finishButton = document.getElementById("finish-button");
       const retryButton = document.getElementById("retry-button");
       const reviewButton = document.getElementById("review-button");
+      const resultPanel = document.getElementById("result-panel");
       const reviewPanel = document.getElementById("review-panel");
       const confetti = document.getElementById("confetti");
 
@@ -111,6 +132,16 @@
         return `${minutes}:${seconds}`;
       }
 
+      function updateStats() {
+        const attempted = answers.length;
+        const accuracy = attempted ? Math.round((correctAnswers / attempted) * 100) : 0;
+        timerText.textContent = formatTime(secondsLeft);
+        scoreText.textContent = `Score: ${correctAnswers}`;
+        attemptedText.textContent = `Attempted: ${attempted}`;
+        progressBar.style.width = `${((startingSeconds - secondsLeft) / startingSeconds) * 100}%`;
+        return accuracy;
+      }
+
       const timer = setInterval(() => {
         if (quizFinished) {
           clearInterval(timer);
@@ -118,7 +149,7 @@
         }
 
         secondsLeft -= 1;
-        timerText.textContent = formatTime(secondsLeft);
+        updateStats();
 
         if (secondsLeft <= 0) {
           showFinalScore();
@@ -126,17 +157,19 @@
       }, 1000);
 
       function showQuestion() {
-        const question = quiz[currentQuestion];
+        if (currentQuestion >= quiz.length) {
+          showFinalScore();
+          return;
+        }
 
-        progressText.textContent = `Question ${currentQuestion + 1} of ${quiz.length}`;
-        scoreText.textContent = `Score: ${score}`;
-        progressBar.style.width = `${(currentQuestion / quiz.length) * 100}%`;
+        const question = quiz[currentQuestion];
+        questionCount.textContent = `Question ${currentQuestion + 1}`;
         questionText.textContent = question.question;
         feedback.textContent = "";
         feedback.className = "feedback";
         nextButton.hidden = true;
         optionsList.innerHTML = "";
-        reviewPanel.hidden = true;
+        updateStats();
 
         question.options.forEach((option) => {
           const button = document.createElement("button");
@@ -150,7 +183,7 @@
 
       function checkAnswer(selectedButton, selectedOption, question) {
         const optionButtons = document.querySelectorAll(".option-button");
-        answers[currentQuestion] = selectedOption;
+        answers.push(selectedOption);
 
         optionButtons.forEach((button) => {
           button.disabled = true;
@@ -161,7 +194,7 @@
         });
 
         if (selectedOption === question.answer) {
-          score += 1;
+          correctAnswers += 1;
           feedback.textContent = `Correct. ${question.explanation || ""}`;
           feedback.classList.add("correct-text");
         } else {
@@ -170,7 +203,7 @@
           feedback.classList.add("wrong-text");
         }
 
-        scoreText.textContent = `Score: ${score}`;
+        updateStats();
         nextButton.hidden = false;
       }
 
@@ -181,7 +214,8 @@
           body: JSON.stringify({
             topic: quizShell.dataset.topic,
             answers: answers,
-            difficulty: quizShell.dataset.difficulty || "easy"
+            difficulty: quizShell.dataset.difficulty || "easy",
+            duration: Number(quizShell.dataset.duration)
           })
         });
 
@@ -195,27 +229,39 @@
 
         quizFinished = true;
         clearInterval(timer);
-        progressText.textContent = `Question ${quiz.length} of ${quiz.length}`;
-        progressBar.style.width = "100%";
         optionsList.innerHTML = "";
         nextButton.hidden = true;
+        finishButton.hidden = true;
         retryButton.hidden = false;
         reviewButton.hidden = false;
+        secondsLeft = Math.max(secondsLeft, 0);
+        updateStats();
 
         const result = await saveResult();
-        const message = result.accuracy >= 80
-          ? "Great work. Next topics are unlocked."
-          : result.accuracy < 50
-            ? "Review prerequisites, then try again."
-            : "Good progress. A practice quiz will help lock this in.";
-
-        questionText.textContent = `You scored ${score} / ${quiz.length}`;
-        feedback.textContent = `${result.accuracy}% accuracy. ${message}`;
+        questionCount.textContent = "Quiz Complete";
+        questionText.textContent = `${result.level} Level Achieved`;
+        feedback.textContent = result.level_comment;
         feedback.className = "feedback correct-text";
 
-        if (result.accuracy >= 80) {
+        resultPanel.hidden = false;
+        resultPanel.innerHTML = `
+          <div class="level-badge">${result.level}</div>
+          <div class="result-grid">
+            <span>Topic<strong>${result.topic}</strong></span>
+            <span>Difficulty<strong>${quizShell.dataset.difficulty.toUpperCase()}</strong></span>
+            <span>Score<strong>${result.accuracy}%</strong></span>
+            <span>Attempted<strong>${result.questions_attempted}</strong></span>
+            <span>Correct<strong>${result.correct_answers}</strong></span>
+            <span>Time<strong>${quizShell.dataset.duration} min</strong></span>
+          </div>
+          <p>${result.funny_comment || ""}</p>
+          <p>${result.motivational_comment || ""}</p>
+          <p>${result.topic_joke || ""}</p>
+        `;
+
+        if (result.accuracy >= 75) {
           confetti.hidden = false;
-          confetti.textContent = "Great work!";
+          confetti.textContent = "Level unlocked!";
         }
       }
 
@@ -223,12 +269,13 @@
         reviewPanel.hidden = false;
         reviewPanel.innerHTML = "<h3>Review Answers</h3>";
 
-        quiz.forEach((question, index) => {
+        answers.forEach((answer, index) => {
+          const question = quiz[index];
           const item = document.createElement("div");
           item.className = "review-item";
           item.innerHTML = `
             <strong>${index + 1}. ${question.question}</strong>
-            <p>Your answer: ${answers[index] || "No answer"}</p>
+            <p>Your answer: ${answer || "No answer"}</p>
             <p>Correct answer: ${question.answer}</p>
             <p>${question.explanation || "Review this topic in your guide."}</p>
           `;
@@ -238,14 +285,10 @@
 
       nextButton.addEventListener("click", () => {
         currentQuestion += 1;
-
-        if (currentQuestion < quiz.length) {
-          showQuestion();
-        } else {
-          showFinalScore();
-        }
+        showQuestion();
       });
 
+      finishButton.addEventListener("click", showFinalScore);
       retryButton.addEventListener("click", () => window.location.reload());
       reviewButton.addEventListener("click", showReview);
 

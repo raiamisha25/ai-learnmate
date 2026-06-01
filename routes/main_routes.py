@@ -18,6 +18,7 @@ from models.state import latest_quiz, latest_result, neo4j_status
 from services.ambiguity_service import check_topic_ambiguity
 from services.neo4j_service import fetch_graph_from_neo4j, fetch_topic_suggestions
 from services.pdf_service import extract_text_from_pdf
+from services.quiz_service import calculate_level, generate_quiz, generate_quiz_comments
 from services.study_service import process_input
 from utils.errors import AppError
 
@@ -220,6 +221,7 @@ def register_routes(app):
             quiz=latest_quiz,
             topic=topic,
             difficulty=session.get("quiz_difficulty", "easy"),
+            duration=session.get("quiz_duration", 3),
             leaderboard=leaderboard(5),
         )
 
@@ -234,15 +236,27 @@ def register_routes(app):
                 quiz=[],
                 topic="",
                 difficulty="easy",
+                duration=3,
                 leaderboard=leaderboard(5),
                 error="Please enter a topic to start a quiz.",
             )
 
         session["quiz_difficulty"] = request.form.get("difficulty", "easy")
-        result = process_input(topic=topic)
-        save_study_plan(g.user["id"], result)
-        add_history(g.user["id"], "started_quiz", result.get("topic"), "Generated a topic quiz")
-        return redirect(url_for("quiz", topic=result.get("topic")))
+        session["quiz_duration"] = int(request.form.get("duration", 3))
+        quiz_questions = generate_quiz(
+            topic,
+            difficulty=session["quiz_difficulty"],
+            duration_minutes=session["quiz_duration"],
+        )
+        latest_quiz.clear()
+        latest_quiz.extend(quiz_questions)
+        add_history(
+            g.user["id"],
+            "started_quiz",
+            topic,
+            f"{session['quiz_difficulty'].title()} quiz for {session['quiz_duration']} minutes",
+        )
+        return redirect(url_for("quiz", topic=topic))
 
     @app.route("/quiz/submit", methods=["POST"])
     @login_required
@@ -251,29 +265,45 @@ def register_routes(app):
         topic = data.get("topic") or latest_result.get("topic") or "Learning Topic"
         answers = data.get("answers", [])
         difficulty = data.get("difficulty", "easy")
+        duration = int(data.get("duration", session.get("quiz_duration", 3)))
         score = 0
         weak_topics = []
+        attempted_questions = min(len(answers), len(latest_quiz))
 
-        for index, question in enumerate(latest_quiz):
-            selected = answers[index] if index < len(answers) else None
+        for index, selected in enumerate(answers[:attempted_questions]):
+            question = latest_quiz[index]
 
             if selected == question.get("answer"):
                 score += 1
             else:
                 weak_topics.append(question.get("question", topic))
 
+        accuracy = round((score / attempted_questions) * 100, 2) if attempted_questions else 0
+        level, level_comment = calculate_level(difficulty, accuracy)
+        comments = generate_quiz_comments(topic, difficulty, accuracy, level)
         progress = save_quiz_attempt(
             g.user["id"],
             topic,
             score,
-            len(latest_quiz),
+            attempted_questions,
             difficulty,
             weak_topics,
+            level=level,
+            duration=duration,
+            comments=comments,
         )
         session["last_quiz_result"] = {
             "topic": topic,
             "score": score,
-            "total": len(latest_quiz),
+            "total": attempted_questions,
+            "questions_attempted": attempted_questions,
+            "correct_answers": score,
+            "duration": duration,
+            "level": level,
+            "level_comment": level_comment,
+            "funny_comment": comments.get("funny_comment"),
+            "motivational_comment": comments.get("motivational_comment"),
+            "topic_joke": comments.get("topic_joke"),
             "weak_topics": weak_topics,
             **progress,
         }
