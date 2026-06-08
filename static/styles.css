@@ -327,7 +327,7 @@ body.dark .review-item {
 .metric-grid,
 .dashboard-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 18px;
 }
 
@@ -628,9 +628,76 @@ body.dark .review-item {
   margin: 0 0 10px;
 }
 
+.study-item-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.compact-study-list,
+.compact-study-item {
+  gap: 10px;
+}
+
+.compact-study-item h3 {
+  margin-bottom: 0;
+}
+
 .study-item p {
   margin-bottom: 8px;
   color: var(--muted);
+}
+
+.status-pill {
+  display: inline-flex;
+  flex-shrink: 0;
+  padding: 6px 10px;
+  border-radius: 999px;
+  color: var(--muted);
+  background: #eef4ff;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.status-learning {
+  color: #075985;
+  background: #dbeafe;
+}
+
+.status-practicing {
+  color: #92400e;
+  background: #fef3c7;
+}
+
+.status-mastered {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.status-not-started {
+  color: var(--muted);
+  background: #eef2f7;
+}
+
+.progress-state-list {
+  display: grid;
+  gap: 10px;
+}
+
+.progress-state-list span {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  background: #f8fbff;
+}
+
+.progress-state-list b {
+  color: var(--text);
 }
 
 .roadmap-note,
@@ -654,7 +721,8 @@ body.dark .review-item {
 
 body.dark .roadmap-note,
 body.dark .roadmap-item,
-body.dark .quiz-result-panel {
+body.dark .quiz-result-panel,
+body.dark .progress-state-list span {
   background: #111827;
 }
 

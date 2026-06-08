@@ -13,6 +13,7 @@ from database.db import (
     save_quiz_attempt,
     save_study_plan,
     save_uploaded_pdf,
+    upsert_topic_progress,
 )
 from models.state import latest_quiz, latest_result, neo4j_status
 from services.ambiguity_service import check_topic_ambiguity
@@ -252,6 +253,7 @@ def register_routes(app):
         )
         latest_quiz.clear()
         latest_quiz.extend(quiz_questions)
+        upsert_topic_progress(g.user["id"], topic, "Learning", score=0)
         add_history(
             g.user["id"],
             "started_quiz",
