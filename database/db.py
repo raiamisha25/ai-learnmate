@@ -20,6 +20,11 @@ STATUS_RANK = {
     PROGRESS_MASTERED: 3,
 }
 
+WEAK_SCORE_THRESHOLD = 50
+STRONG_SCORE_THRESHOLD = 80
+REPEATED_WEAK_ATTEMPTS = 2
+ADAPTIVE_RECOMMENDATION_LIMIT = 6
+
 
 def get_connection():
     os.makedirs(DATABASE_FOLDER, exist_ok=True)
@@ -138,6 +143,22 @@ def init_db():
                 UNIQUE(user_id, topic),
                 FOREIGN KEY (user_id) REFERENCES users(id)
             );
+
+            CREATE TABLE IF NOT EXISTS performance_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                quiz_attempt_id INTEGER,
+                topic TEXT NOT NULL,
+                accuracy REAL NOT NULL,
+                strength TEXT NOT NULL,
+                trend TEXT NOT NULL,
+                low_score_streak INTEGER NOT NULL,
+                revision_recommended INTEGER DEFAULT 0,
+                details TEXT,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES users(id),
+                FOREIGN KEY (quiz_attempt_id) REFERENCES quiz_attempts(id)
+            );
             """
         )
         ensure_column(connection, "quiz_attempts", "level", "TEXT")
@@ -150,6 +171,9 @@ def init_db():
         ensure_column(connection, "user_progress", "roadmap_total", "INTEGER DEFAULT 1")
         ensure_column(connection, "user_progress", "roadmap_completed", "INTEGER DEFAULT 0")
         ensure_column(connection, "user_progress", "completion_percentage", "REAL DEFAULT 0")
+        ensure_column(connection, "topic_scores", "trend", "TEXT DEFAULT 'Stable'")
+        ensure_column(connection, "topic_scores", "low_score_streak", "INTEGER DEFAULT 0")
+        ensure_column(connection, "topic_scores", "revision_recommended", "INTEGER DEFAULT 0")
         migrate_progress_statuses(connection)
 
 
@@ -227,6 +251,188 @@ def roadmap_percentage(status, accuracy=0):
     if status == PROGRESS_LEARNING:
         return max(25, min(59, round(accuracy)))
     return 0
+
+
+def calculate_performance_trend(attempts):
+    """Compare recent quiz attempts to show whether a topic is improving."""
+    scores = [float(item["accuracy"]) for item in attempts]
+
+    if len(scores) < 2:
+        return "Stable"
+
+    newest = scores[0]
+    previous = scores[1]
+
+    if newest >= previous + 5:
+        return "Improving"
+    if newest <= previous - 5:
+        return "Declining"
+    return "Stable"
+
+
+def low_score_streak(attempts):
+    streak = 0
+
+    for item in attempts:
+        if float(item["accuracy"]) < WEAK_SCORE_THRESHOLD:
+            streak += 1
+        else:
+            break
+
+    return streak
+
+
+def topic_performance_summary(user_id, topic):
+    attempts = run_query(
+        """
+        SELECT accuracy
+        FROM quiz_attempts
+        WHERE user_id = ? AND topic = ?
+        ORDER BY created_at DESC
+        LIMIT 5
+        """,
+        (user_id, topic),
+        fetchall=True,
+    )
+    streak = low_score_streak(attempts)
+    trend = calculate_performance_trend(attempts)
+    revision_recommended = streak >= REPEATED_WEAK_ATTEMPTS
+
+    return {
+        "trend": trend,
+        "low_score_streak": streak,
+        "revision_recommended": revision_recommended,
+    }
+
+
+def topic_key(topic):
+    return (topic or "").strip().lower()
+
+
+def split_topic_lines(text):
+    return [line.strip() for line in (text or "").splitlines() if line.strip()]
+
+
+def progress_is_mastered(item):
+    return normalize_progress_status(item["status"], item["last_score"]) == PROGRESS_MASTERED
+
+
+def roadmap_item(topic, source=None, reason=None, score=None, trend="Stable", status="Ready To Learn"):
+    return {
+        "topic": topic,
+        "source": source,
+        "reason": reason or "Prerequisites are clear for this topic.",
+        "score": score,
+        "trend": trend or "Stable",
+        "status": status,
+    }
+
+
+def adaptive_roadmap_data(saved_topics, normalized_progress, topic_scores):
+    """Build personalized roadmap lanes from progress, weak topics, and prerequisites."""
+    saved_by_key = {topic_key(item["topic"]): item for item in saved_topics}
+    progress_by_key = {topic_key(item["topic"]): item for item in normalized_progress}
+    score_by_key = {topic_key(item["topic"]): item for item in topic_scores}
+    mastered_keys = {
+        topic_key(item["topic"])
+        for item in normalized_progress
+        if progress_is_mastered(item)
+    }
+    mastered_keys.update(
+        topic_key(item["topic"]) for item in topic_scores if item["strength"] == "strong"
+    )
+    weak_keys = {
+        topic_key(item["topic"])
+        for item in topic_scores
+        if item["strength"] == "weak" or bool(item["revision_recommended"])
+    }
+
+    def prerequisites_for(topic_name):
+        saved = saved_by_key.get(topic_key(topic_name))
+        return split_topic_lines(saved["before_topics"]) if saved else []
+
+    def missing_prerequisites(topic_name):
+        return [
+            prereq
+            for prereq in prerequisites_for(topic_name)
+            if topic_key(prereq) not in mastered_keys
+        ]
+
+    def is_ready(topic_name):
+        key = topic_key(topic_name)
+        return key not in mastered_keys and key not in weak_keys and not missing_prerequisites(topic_name)
+
+    def add_unique(items, seen, item):
+        key = topic_key(item["topic"])
+        if key and key not in seen:
+            items.append(item)
+            seen.add(key)
+
+    ready_to_learn = []
+    recommended_next = []
+    seen_ready = set()
+    seen_next = set()
+
+    for topic in saved_topics:
+        topic_name = topic["topic"]
+        key = topic_key(topic_name)
+        progress = progress_by_key.get(key)
+        score = score_by_key.get(key)
+
+        if is_ready(topic_name):
+            add_unique(
+                ready_to_learn,
+                seen_ready,
+                roadmap_item(
+                    topic_name,
+                    score=float(progress.get("last_score") or 0) if progress else None,
+                    trend=score["trend"] if score else "Stable",
+                    reason="All saved prerequisites are mastered.",
+                ),
+            )
+
+    for topic in saved_topics:
+        source_topic = topic["topic"]
+        if topic_key(source_topic) not in mastered_keys:
+            continue
+
+        for next_topic in split_topic_lines(topic["after_topics"]):
+            missing = missing_prerequisites(next_topic)
+            if not is_ready(next_topic):
+                continue
+
+            if missing:
+                continue
+
+            add_unique(
+                recommended_next,
+                seen_next,
+                roadmap_item(
+                    next_topic,
+                    source=source_topic,
+                    reason=f"Unlocked after mastering {source_topic}.",
+                    status="Recommended Next",
+                ),
+            )
+
+    if len(recommended_next) < ADAPTIVE_RECOMMENDATION_LIMIT:
+        for item in ready_to_learn:
+            add_unique(
+                recommended_next,
+                seen_next,
+                {
+                    **item,
+                    "status": "Recommended Next",
+                    "reason": item["reason"],
+                },
+            )
+            if len(recommended_next) >= ADAPTIVE_RECOMMENDATION_LIMIT:
+                break
+
+    return {
+        "ready_to_learn": ready_to_learn[:ADAPTIVE_RECOMMENDATION_LIMIT],
+        "recommended_next": recommended_next[:ADAPTIVE_RECOMMENDATION_LIMIT],
+    }
 
 
 def upsert_topic_progress(user_id, topic, status=PROGRESS_LEARNING, score=0):
@@ -389,7 +595,7 @@ def save_quiz_attempt(
     created_at = now_text()
     comments = comments or {}
 
-    run_query(
+    attempt_cursor = run_query(
         """
         INSERT INTO quiz_attempts
             (
@@ -418,6 +624,7 @@ def save_quiz_attempt(
         ),
         commit=True,
     )
+    attempt_id = attempt_cursor.lastrowid
 
     status = status_from_accuracy(accuracy)
     unlocked_next = 1 if status == PROGRESS_MASTERED else 0
@@ -430,6 +637,8 @@ def save_quiz_attempt(
         fetchone=True,
     )
 
+    performance = topic_performance_summary(user_id, topic)
+
     if old_score:
         attempts = old_score["attempts"] + 1
         average = round(((old_score["average_score"] * old_score["attempts"]) + accuracy) / attempts, 2)
@@ -437,19 +646,75 @@ def save_quiz_attempt(
         attempts = 1
         average = accuracy
 
-    strength = "strong" if average >= 80 else "weak" if average < 50 else "growing"
+    if performance["revision_recommended"] or average < WEAK_SCORE_THRESHOLD:
+        strength = "weak"
+    elif average >= STRONG_SCORE_THRESHOLD:
+        strength = "strong"
+    else:
+        strength = "growing"
 
     run_query(
         """
-        INSERT INTO topic_scores (user_id, topic, average_score, attempts, strength, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO topic_scores
+            (
+                user_id, topic, average_score, attempts, strength,
+                trend, low_score_streak, revision_recommended, updated_at
+            )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(user_id, topic) DO UPDATE SET
             average_score = excluded.average_score,
             attempts = excluded.attempts,
             strength = excluded.strength,
+            trend = excluded.trend,
+            low_score_streak = excluded.low_score_streak,
+            revision_recommended = excluded.revision_recommended,
             updated_at = excluded.updated_at
         """,
-        (user_id, topic, average, attempts, strength, created_at),
+        (
+            user_id,
+            topic,
+            average,
+            attempts,
+            strength,
+            performance["trend"],
+            performance["low_score_streak"],
+            1 if performance["revision_recommended"] else 0,
+            created_at,
+        ),
+        commit=True,
+    )
+
+    if performance["revision_recommended"]:
+        details = (
+            f"Needs Revision: {performance['low_score_streak']} recent attempts below "
+            f"{WEAK_SCORE_THRESHOLD}%."
+        )
+    elif strength == "strong":
+        details = f"Strong topic: average score is {average}%."
+    else:
+        details = f"Current average score is {average}%."
+
+    run_query(
+        """
+        INSERT INTO performance_history
+            (
+                user_id, quiz_attempt_id, topic, accuracy, strength, trend,
+                low_score_streak, revision_recommended, details, created_at
+            )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            user_id,
+            attempt_id,
+            topic,
+            accuracy,
+            strength,
+            performance["trend"],
+            performance["low_score_streak"],
+            1 if performance["revision_recommended"] else 0,
+            details,
+            created_at,
+        ),
         commit=True,
     )
 
@@ -479,6 +744,10 @@ def save_quiz_attempt(
         "accuracy": accuracy,
         "status": status,
         "unlocked_next": bool(unlocked_next),
+        "strength": strength,
+        "trend": performance["trend"],
+        "low_score_streak": performance["low_score_streak"],
+        "revision_recommended": performance["revision_recommended"],
     }
 
 
@@ -489,7 +758,7 @@ def dashboard_data(user_id):
         fetchone=True,
     )
     saved_topics = run_query(
-        "SELECT * FROM saved_topics WHERE user_id = ? ORDER BY created_at DESC LIMIT 6",
+        "SELECT * FROM saved_topics WHERE user_id = ? ORDER BY created_at DESC",
         (user_id,),
         fetchall=True,
     )
@@ -508,18 +777,37 @@ def dashboard_data(user_id):
         (user_id,),
         fetchall=True,
     )
+    performance_history = run_query(
+        """
+        SELECT *
+        FROM performance_history
+        WHERE user_id = ?
+        ORDER BY created_at DESC
+        LIMIT 10
+        """,
+        (user_id,),
+        fetchall=True,
+    )
     progress = run_query(
         "SELECT * FROM user_progress WHERE user_id = ? ORDER BY updated_at DESC",
         (user_id,),
         fetchall=True,
     )
 
+    score_by_topic = {item["topic"]: item for item in topic_scores}
     normalized_progress = []
     for item in progress:
+        topic_score = score_by_topic.get(item["topic"])
+        display_status = normalize_progress_status(item["status"], item["last_score"])
+
+        if topic_score and (topic_score["strength"] == "weak" or bool(topic_score["revision_recommended"])):
+            display_status = "Needs Revision"
+
         normalized_progress.append(
             {
                 **dict(item),
                 "status": normalize_progress_status(item["status"], item["last_score"]),
+                "display_status": display_status,
                 "completion_percentage": item["completion_percentage"]
                 if "completion_percentage" in item.keys()
                 else roadmap_percentage(item["status"], item["last_score"]),
@@ -539,6 +827,22 @@ def dashboard_data(user_id):
 
     weak_topics = [item for item in topic_scores if item["strength"] == "weak"][:5]
     strong_topics = [item for item in topic_scores if item["strength"] == "strong"][:5]
+    needs_revision = [
+        item
+        for item in topic_scores
+        if item["strength"] == "weak" or bool(item["revision_recommended"])
+    ][:5]
+    revision_quizzes = [
+        {
+            "topic": item["topic"],
+            "average_score": item["average_score"],
+            "trend": item["trend"],
+            "low_score_streak": item["low_score_streak"],
+            "difficulty": "easy" if float(item["average_score"]) < 50 else "medium",
+            "duration": 3,
+        }
+        for item in needs_revision
+    ]
     continue_learning = [
         item
         for item in normalized_progress
@@ -555,6 +859,7 @@ def dashboard_data(user_id):
     ][:5]
     recommended = []
     roadmap_completion = 0
+    adaptive_roadmap = adaptive_roadmap_data(saved_topics, normalized_progress, topic_scores)
 
     if normalized_progress:
         roadmap_completion = round(
@@ -573,6 +878,7 @@ def dashboard_data(user_id):
         "recent_history": recent_history,
         "quiz_attempts": quiz_attempts,
         "topic_scores": topic_scores,
+        "performance_history": performance_history,
         "progress": normalized_progress,
         "total_topics": total_topics,
         "tracked_topics": tracked_topics,
@@ -582,9 +888,13 @@ def dashboard_data(user_id):
         "weak_topics": weak_topics,
         "failed_topics": failed_topics,
         "strong_topics": strong_topics,
+        "needs_revision": needs_revision,
+        "revision_quizzes": revision_quizzes,
         "continue_learning": continue_learning,
         "recently_studied": recently_studied,
         "mastered_topics": mastered_topics,
+        "ready_to_learn": adaptive_roadmap["ready_to_learn"],
+        "recommended_next": adaptive_roadmap["recommended_next"],
         "recommended": recommended[:5],
         "streak": learning_streak(user_id),
     }

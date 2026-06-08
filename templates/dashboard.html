@@ -54,6 +54,50 @@
 
       <section class="dashboard-grid">
         <div class="card">
+          <p class="eyebrow">Adaptive Roadmap</p>
+          <h2>Ready To Learn</h2>
+          {% if data.ready_to_learn %}
+            <div class="study-list">
+              {% for item in data.ready_to_learn %}
+                <div class="study-item">
+                  <div class="study-item-heading">
+                    <h3>{{ item.topic }}</h3>
+                    <span class="status-pill status-ready-to-learn">Ready To Learn</span>
+                  </div>
+                  <p>{{ item.reason }}</p>
+                  <a class="button secondary" href="{{ url_for('topic', topic=item.topic) }}">Open Guide</a>
+                </div>
+              {% endfor %}
+            </div>
+          {% else %}
+            <p class="muted">Ready topics appear when prerequisites are mastered.</p>
+          {% endif %}
+        </div>
+
+        <div class="card">
+          <p class="eyebrow">Adaptive Roadmap</p>
+          <h2>Recommended Next</h2>
+          {% if data.recommended_next %}
+            <div class="study-list compact-study-list">
+              {% for item in data.recommended_next %}
+                <div class="study-item compact-study-item">
+                  <div class="study-item-heading">
+                    <h3>{{ item.topic }}</h3>
+                    <span class="status-pill status-recommended-next">Recommended Next</span>
+                  </div>
+                  <p>{{ item.reason }}</p>
+                  <a class="button secondary" href="{{ url_for('quiz', topic=item.topic) }}">Start Quiz</a>
+                </div>
+              {% endfor %}
+            </div>
+          {% else %}
+            <p class="muted">Next-topic recommendations unlock after completed prerequisites.</p>
+          {% endif %}
+        </div>
+      </section>
+
+      <section class="dashboard-grid">
+        <div class="card">
           <div class="section-title">
             <div>
               <p class="eyebrow">Continue Learning</p>
@@ -66,7 +110,7 @@
                 <div class="study-item">
                   <div class="study-item-heading">
                     <h3>{{ item.topic }}</h3>
-                    <span class="status-pill status-{{ item.status|lower|replace(' ', '-') }}">{{ item.status }}</span>
+                    <span class="status-pill status-{{ item.display_status|lower|replace(' ', '-') }}">{{ item.display_status }}</span>
                   </div>
                   <div class="progress-track small">
                     <div class="progress-bar" style="width: {{ item.completion_percentage }}%"></div>
@@ -88,7 +132,7 @@
             <span><b>{{ data.tracked_topics }}</b> Tracked</span>
             <span><b>{{ data.continue_learning|length }}</b> Learning</span>
             <span><b>{{ data.mastered_topics|length }}</b> Mastered</span>
-            <span><b>{{ data.failed_topics|length }}</b> Needs Practice</span>
+            <span><b>{{ data.needs_revision|length }}</b> Needs Revision</span>
           </div>
 
           <div class="score-ring" style="--score: {{ data.roadmap_completion }}%">
@@ -107,7 +151,7 @@
                 <div class="study-item compact-study-item">
                   <div class="study-item-heading">
                     <h3>{{ item.topic }}</h3>
-                    <span class="status-pill status-{{ item.status|lower|replace(' ', '-') }}">{{ item.status }}</span>
+                    <span class="status-pill status-{{ item.display_status|lower|replace(' ', '-') }}">{{ item.display_status }}</span>
                   </div>
                   <div class="progress-track small">
                     <div class="progress-bar" style="width: {{ item.completion_percentage }}%"></div>
@@ -121,16 +165,26 @@
         </div>
 
         <div class="card">
-          <p class="eyebrow">Recommended Next</p>
-          <h2>Your next topics</h2>
-          {% if data.recommended %}
-            <ul class="mini-list">
-              {% for topic in data.recommended %}
-                <li>{{ topic }}</li>
+          <p class="eyebrow">Recommended Revision Quizzes</p>
+          <h2>Practice what needs another pass</h2>
+          {% if data.revision_quizzes %}
+            <div class="study-list compact-study-list">
+              {% for item in data.revision_quizzes %}
+                <div class="study-item compact-study-item">
+                  <div class="study-item-heading">
+                    <h3>{{ item.topic }}</h3>
+                    <span class="status-pill status-needs-revision">Needs Revision</span>
+                  </div>
+                  <p>{{ item.trend }} trend - {{ item.average_score }}% average</p>
+                  <a
+                    class="button secondary"
+                    href="{{ url_for('quiz', topic=item.topic, difficulty=item.difficulty, duration=item.duration, revision=1) }}"
+                  >Revision Quiz</a>
+                </div>
               {% endfor %}
-            </ul>
+            </div>
           {% else %}
-            <p class="muted">Recommendations will appear after you create a learning guide.</p>
+            <p class="muted">Revision quizzes appear automatically after repeated low scores.</p>
           {% endif %}
         </div>
       </section>
@@ -142,7 +196,11 @@
           {% if data.weak_topics %}
             <ul class="mini-list">
               {% for item in data.weak_topics %}
-                <li>{{ item.topic }} - {{ item.average_score }}%</li>
+                <li>
+                  {{ item.topic }} - {{ item.average_score }}%
+                  <span class="trend-label">{{ item.trend }}</span>
+                  {% if item.revision_recommended %}<b>Needs Revision</b>{% endif %}
+                </li>
               {% endfor %}
             </ul>
           {% else %}
@@ -153,10 +211,10 @@
         <div class="card">
           <p class="eyebrow">Mastered Topics</p>
           <h2>Topics you own now</h2>
-          {% if data.mastered_topics %}
+          {% if data.strong_topics %}
             <ul class="mini-list">
-              {% for item in data.mastered_topics %}
-                <li>{{ item.topic }} - {{ item.completion_percentage }}%</li>
+              {% for item in data.strong_topics %}
+                <li>{{ item.topic }} - {{ item.average_score }}% <span class="trend-label">{{ item.trend }}</span></li>
               {% endfor %}
             </ul>
           {% else %}

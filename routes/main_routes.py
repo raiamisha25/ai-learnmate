@@ -189,7 +189,7 @@ def register_routes(app):
                 add_history(g.user["id"], "searched_topic", result.get("topic"), "Manual topic search")
             return render_template("result.html", result=result)
 
-        return render_template("topic_input.html")
+        return render_template("topic_input.html", topic=request.args.get("topic", ""))
 
     @app.route("/study-path")
     def study_path():
@@ -198,12 +198,23 @@ def register_routes(app):
 
         graph_data = fetch_graph_from_neo4j()
         suggestions = fetch_topic_suggestions()
+        adaptive_data = dashboard_data(g.user["id"]) if g.get("user") else None
 
         if graph_data.get("nodes") or suggestions:
             return render_template(
                 "study_path.html",
                 graph=graph_data,
                 suggestions=suggestions,
+                adaptive_data=adaptive_data,
+                neo4j_status=neo4j_status,
+            )
+
+        if adaptive_data:
+            return render_template(
+                "study_path.html",
+                graph=graph_data,
+                suggestions=suggestions,
+                adaptive_data=adaptive_data,
                 neo4j_status=neo4j_status,
             )
 
@@ -218,13 +229,20 @@ def register_routes(app):
     def quiz():
         topic = request.args.get("topic", latest_result.get("topic", ""))
         started = request.args.get("started") == "1"
+        difficulty = request.args.get("difficulty") or session.get("quiz_difficulty", "easy")
+        try:
+            duration = int(request.args.get("duration") or session.get("quiz_duration", 3))
+        except (TypeError, ValueError):
+            duration = 3
+
         return render_template(
             "quiz.html",
             quiz=latest_quiz if started else [],
             setup_only=not started,
             topic=topic,
-            difficulty=session.get("quiz_difficulty", "easy"),
-            duration=session.get("quiz_duration", 3),
+            difficulty=difficulty,
+            duration=duration,
+            revision_mode=request.args.get("revision") == "1",
             leaderboard=leaderboard(5),
         )
 

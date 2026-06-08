@@ -13,6 +13,76 @@
     <div class="message warning">{{ neo4j_status.message }}</div>
   {% endif %}
 
+  {% if adaptive_data %}
+    <section class="dashboard-grid">
+      <div class="card">
+        <p class="eyebrow">Adaptive Roadmap</p>
+        <h2>Ready To Learn</h2>
+        {% if adaptive_data.ready_to_learn %}
+          <div class="study-list">
+            {% for item in adaptive_data.ready_to_learn %}
+              <div class="study-item">
+                <div class="study-item-heading">
+                  <h3>{{ item.topic }}</h3>
+                  <span class="status-pill status-ready-to-learn">Ready To Learn</span>
+                </div>
+                <p>{{ item.reason }}</p>
+                <a class="button secondary" href="{{ url_for('topic', topic=item.topic) }}">Open Guide</a>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="muted">Ready topics appear when prerequisites are mastered.</p>
+        {% endif %}
+      </div>
+
+      <div class="card">
+        <p class="eyebrow">Adaptive Roadmap</p>
+        <h2>Recommended Next</h2>
+        {% if adaptive_data.recommended_next %}
+          <div class="study-list">
+            {% for item in adaptive_data.recommended_next %}
+              <div class="study-item">
+                <div class="study-item-heading">
+                  <h3>{{ item.topic }}</h3>
+                  <span class="status-pill status-recommended-next">Recommended Next</span>
+                </div>
+                <p>{{ item.reason }}</p>
+                <a class="button secondary" href="{{ url_for('quiz', topic=item.topic) }}">Start Quiz</a>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="muted">Next-topic recommendations unlock after completed prerequisites.</p>
+        {% endif %}
+      </div>
+    </section>
+
+    <section class="card">
+      <p class="eyebrow">Adaptive Roadmap</p>
+      <h2>Needs Revision</h2>
+      {% if adaptive_data.revision_quizzes %}
+        <div class="study-list">
+          {% for item in adaptive_data.revision_quizzes %}
+            <div class="study-item">
+              <div class="study-item-heading">
+                <h3>{{ item.topic }}</h3>
+                <span class="status-pill status-needs-revision">Needs Revision</span>
+              </div>
+              <p>{{ item.trend }} trend - {{ item.average_score }}% average</p>
+              <a
+                class="button secondary"
+                href="{{ url_for('quiz', topic=item.topic, difficulty=item.difficulty, duration=item.duration, revision=1) }}"
+              >Revision Quiz</a>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="muted">Revision topics appear automatically after repeated low quiz scores.</p>
+      {% endif %}
+    </section>
+  {% endif %}
+
   {% if suggestions %}
     <section class="flow-stack">
       {% for topic, items in suggestions.items() %}

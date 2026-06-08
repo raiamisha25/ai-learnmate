@@ -12,7 +12,7 @@
   <section class="card topic-search-card">
     <form id="topic-form" class="topic-form" method="POST">
       <label for="topic">Enter a topic</label>
-      <input id="topic" name="topic" type="text" placeholder="Example: Linked List">
+      <input id="topic" name="topic" type="text" value="{{ topic or '' }}" placeholder="Example: Linked List">
       <button type="submit">Get Study Plan</button>
     </form>
 

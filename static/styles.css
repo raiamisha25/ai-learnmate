@@ -670,6 +670,32 @@ body.dark .review-item {
   background: #fef3c7;
 }
 
+.status-needs-revision,
+.status-weak {
+  color: #991b1b;
+  background: #fee2e2;
+}
+
+.status-strong {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.status-growing {
+  color: #075985;
+  background: #dbeafe;
+}
+
+.status-ready-to-learn {
+  color: #075985;
+  background: #dbeafe;
+}
+
+.status-recommended-next {
+  color: #0f766e;
+  background: #dff7f2;
+}
+
 .status-mastered {
   color: #166534;
   background: #dcfce7;
@@ -734,6 +760,14 @@ body.dark .progress-state-list span {
 
 .mini-list li {
   line-height: 1.5;
+}
+
+.trend-label {
+  display: inline-flex;
+  margin-left: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .quiz-list {

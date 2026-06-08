@@ -13,6 +13,12 @@
     <div class="message error">{{ error }}</div>
   {% endif %}
 
+  {% if revision_mode %}
+    <div class="message warning">
+      Needs Revision: this quiz is recommended from your recent performance trend.
+    </div>
+  {% endif %}
+
   {% if not quiz %}
     <section class="card quiz-start-card">
       <form class="topic-form quiz-start-form" method="POST" action="{{ url_for('start_quiz') }}">
@@ -264,7 +270,10 @@
             <span>Attempted<strong>${result.questions_attempted}</strong></span>
             <span>Correct<strong>${result.correct_answers}</strong></span>
             <span>Time<strong>${quizShell.dataset.duration} min</strong></span>
+            <span>Trend<strong>${result.trend || "Stable"}</strong></span>
+            <span>Status<strong>${result.revision_recommended ? "Needs Revision" : result.strength}</strong></span>
           </div>
+          ${result.revision_recommended ? `<p><strong>Needs Revision:</strong> Take another revision quiz after reviewing the missed questions.</p>` : ""}
           <p>${result.funny_comment || ""}</p>
           <p>${result.motivational_comment || ""}</p>
           <p>${result.topic_joke || ""}</p>
