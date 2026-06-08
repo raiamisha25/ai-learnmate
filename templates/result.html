@@ -4,7 +4,7 @@
 
 {% block content %}
   <section class="page-header">
-    <p class="eyebrow">Learning Guide</p>
+    <p class="eyebrow">Learning Journey</p>
     <h1>{{ result.topic }}</h1>
     <p class="muted">
       {{ result.difficulty or "Beginner" }} · {{ result.estimated_time or "2-4 hours" }}
@@ -17,25 +17,36 @@
       <div class="flow-heading">
         <span class="flow-icon">1</span>
         <div>
-          <p class="eyebrow">Step 1</p>
-          <h2>Simple Explanation</h2>
+          <p class="eyebrow">What Is This Topic?</p>
+          <h2>Simple definition</h2>
         </div>
       </div>
-      <p class="flow-text">{{ result.summary|nl2br }}</p>
-      {% if result.analogy %}
-        <div class="roadmap-note">
-          <strong>Real-world analogy</strong>
-          <p>{{ result.analogy }}</p>
-        </div>
-      {% endif %}
+      <p class="flow-text">{{ result.definition or result.summary }}</p>
     </div>
 
     <div class="card flow-card">
       <div class="flow-heading">
         <span class="flow-icon">2</span>
         <div>
-          <p class="eyebrow">Step 2</p>
-          <h2>Learn This First</h2>
+          <p class="eyebrow">Why Is It Important?</p>
+          <h2>Why it matters</h2>
+        </div>
+      </div>
+      <p class="flow-text">{{ result.why_it_matters or result.summary }}</p>
+      {% if result.example or result.analogy %}
+        <div class="roadmap-note">
+          <strong>Real World Example</strong>
+          <p>{{ result.example or result.analogy }}</p>
+        </div>
+      {% endif %}
+    </div>
+
+    <div class="card flow-card">
+      <div class="flow-heading">
+        <span class="flow-icon">3</span>
+        <div>
+          <p class="eyebrow">Learn Before</p>
+          <h2>Prerequisites</h2>
         </div>
       </div>
 
@@ -49,16 +60,16 @@
           {% endfor %}
         </div>
       {% else %}
-        <p class="muted">No prerequisite topics found yet.</p>
+        <p class="muted">No required prerequisites found. You can start here.</p>
       {% endif %}
     </div>
 
     <div class="card flow-card">
       <div class="flow-heading">
-        <span class="flow-icon">3</span>
+        <span class="flow-icon">4</span>
         <div>
-          <p class="eyebrow">Step 3</p>
-          <h2>Continue With</h2>
+          <p class="eyebrow">Learn Next</p>
+          <h2>Progression path</h2>
         </div>
       </div>
 
@@ -79,10 +90,10 @@
     {% if result.related %}
       <div class="card flow-card">
         <div class="flow-heading">
-          <span class="flow-icon">+</span>
+          <span class="flow-icon">5</span>
           <div>
-            <p class="eyebrow">Helpful Connections</p>
-            <h2>Related ideas</h2>
+            <p class="eyebrow">Related Topics</p>
+            <h2>Useful connections</h2>
           </div>
         </div>
         <div class="roadmap-list">
@@ -98,19 +109,15 @@
 
     <div class="card flow-card">
       <div class="flow-heading">
-        <span class="flow-icon">4</span>
+        <span class="flow-icon">6</span>
         <div>
-          <p class="eyebrow">Step 4</p>
-          <h2>Test Yourself</h2>
+          <p class="eyebrow">Take Quiz</p>
+          <h2>Check your understanding</h2>
         </div>
       </div>
 
-      {% if result.quiz %}
-        <p class="muted">Your quiz is ready. Answer one question at a time and check your score.</p>
-        <a class="button" href="{{ url_for('quiz', topic=result.topic) }}">Start Quiz</a>
-      {% else %}
-        <p class="muted">Quiz questions could not be generated yet. Try again after checking your API key.</p>
-      {% endif %}
+      <p class="muted">Choose difficulty and time first. The quiz timer will not start until you press Start Quiz.</p>
+      <a class="button" href="{{ url_for('quiz', topic=result.topic) }}">Take Quiz</a>
     </div>
   </section>
 {% endblock %}

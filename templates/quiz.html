@@ -6,36 +6,44 @@
   <section class="page-header">
     <p class="eyebrow">Quiz 2.0</p>
     <h1>Timed adaptive quiz</h1>
-    <p class="muted">Pick a topic, difficulty, and timer. Answer as many questions as you can before time runs out.</p>
+    <p class="muted">Confirm your topic, choose difficulty and time, then start when you are ready.</p>
   </section>
 
   {% if error %}
     <div class="message error">{{ error }}</div>
   {% endif %}
 
-  <section class="card quiz-start-card">
-    <form class="topic-form quiz-start-form" method="POST" action="{{ url_for('start_quiz') }}">
-      <label for="topic">Topic</label>
-      <input id="topic" name="topic" type="text" value="{{ topic }}" placeholder="Example: Binary Tree">
+  {% if not quiz %}
+    <section class="card quiz-start-card">
+      <form class="topic-form quiz-start-form" method="POST" action="{{ url_for('start_quiz') }}">
+        <label for="topic">Topic</label>
+        <input id="topic" name="topic" type="text" value="{{ topic }}" placeholder="Example: Binary Tree">
 
-      <label for="difficulty">Difficulty</label>
-      <select id="difficulty" name="difficulty">
-        <option value="easy" {% if difficulty == "easy" %}selected{% endif %}>Easy</option>
-        <option value="medium" {% if difficulty == "medium" %}selected{% endif %}>Medium</option>
-        <option value="hard" {% if difficulty == "hard" %}selected{% endif %}>Hard</option>
-      </select>
+        <label for="difficulty">Difficulty</label>
+        <select id="difficulty" name="difficulty">
+          <option value="easy" {% if difficulty == "easy" %}selected{% endif %}>Easy</option>
+          <option value="medium" {% if difficulty == "medium" %}selected{% endif %}>Medium</option>
+          <option value="hard" {% if difficulty == "hard" %}selected{% endif %}>Hard</option>
+        </select>
 
-      <label for="duration">Time</label>
-      <select id="duration" name="duration">
-        <option value="1" {% if duration == 1 %}selected{% endif %}>1 minute</option>
-        <option value="3" {% if duration == 3 %}selected{% endif %}>3 minutes</option>
-        <option value="5" {% if duration == 5 %}selected{% endif %}>5 minutes</option>
-        <option value="10" {% if duration == 10 %}selected{% endif %}>10 minutes</option>
-      </select>
+        <label for="duration">Time</label>
+        <select id="duration" name="duration">
+          <option value="1" {% if duration == 1 %}selected{% endif %}>1 minute</option>
+          <option value="3" {% if duration == 3 %}selected{% endif %}>3 minutes</option>
+          <option value="5" {% if duration == 5 %}selected{% endif %}>5 minutes</option>
+          <option value="10" {% if duration == 10 %}selected{% endif %}>10 minutes</option>
+        </select>
 
-      <button type="submit">Start Quiz</button>
-    </form>
-  </section>
+        <button type="submit">Start Quiz</button>
+      </form>
+    </section>
+  {% else %}
+    <section class="card quiz-start-card quiz-status-card">
+      <p class="eyebrow">Quiz in progress</p>
+      <h2>{{ topic }}</h2>
+      <p class="muted">{{ difficulty|title }} difficulty · {{ duration }} minute{% if duration != 1 %}s{% endif %}</p>
+    </section>
+  {% endif %}
 
   {% if quiz %}
     <section
@@ -76,8 +84,11 @@
     </section>
   {% else %}
     <section class="card empty-state">
-      <h2>No quiz loaded yet</h2>
-      <p>Choose a topic, difficulty, and timer above to begin.</p>
+      <h2>Quiz setup</h2>
+      {% if topic %}
+        <p class="muted">Selected topic: <strong>{{ topic }}</strong></p>
+      {% endif %}
+      <p>Pick your settings above. The timer starts only after you press Start Quiz.</p>
     </section>
   {% endif %}
 

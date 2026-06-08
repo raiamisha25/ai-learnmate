@@ -11,14 +11,17 @@ Create beginner-friendly learning roadmaps.
 Return JSON only. No markdown.
 Never include random nouns, adjectives, filler words, sentence fragments, or generic words.
 Only include meaningful educational concepts.
+Explanations must be simple, concrete, and useful for a beginner.
 """
 
 
 CURATED_ROADMAPS = {
     "ArrayList": {
         "topic": "ArrayList",
-        "explanation": "An ArrayList is a resizable list that stores elements in order and grows as needed.",
-        "analogy": "Think of it like a notebook where you can keep adding pages without creating a new notebook.",
+        "definition": "An ArrayList stores items in order and can grow when you add more items.",
+        "why_it_matters": "It makes it easy to store, access, and update a changing list of data.",
+        "example": "Like a playlist where songs stay in order, but you can keep adding more.",
+        "explanation": "Definition: An ArrayList stores items in order and can grow when you add more items.\nWhy It Matters: It makes changing lists easy to manage.\nReal World Example: Like a playlist where you can keep adding songs.",
         "difficulty": "Beginner",
         "estimated_time": "2 hours",
         "prerequisites": [
@@ -35,8 +38,10 @@ CURATED_ROADMAPS = {
     },
     "Binary Tree": {
         "topic": "Binary Tree",
-        "explanation": "A Binary Tree stores data as nodes where each node can have up to two children.",
-        "analogy": "It is like a family tree where each person can branch into two children.",
+        "definition": "A Binary Tree stores data in nodes where each node can have up to two children.",
+        "why_it_matters": "It helps organize data for searching, sorting, and decision-making.",
+        "example": "Like a yes/no decision chart that branches into smaller choices.",
+        "explanation": "Definition: A Binary Tree stores data in nodes with up to two children.\nWhy It Matters: It helps organize data for searching and decisions.\nReal World Example: Like a yes/no decision chart.",
         "difficulty": "Intermediate",
         "estimated_time": "4 hours",
         "prerequisites": [
@@ -52,10 +57,34 @@ CURATED_ROADMAPS = {
             {"topic": "Tree Traversal", "why": "Traversal is how you visit every node."}
         ],
     },
+    "Linked List": {
+        "topic": "Linked List",
+        "definition": "A Linked List stores items as connected nodes instead of one continuous block.",
+        "why_it_matters": "It teaches how data can grow, shrink, and connect through references.",
+        "example": "Like a treasure hunt where each clue points to the next clue.",
+        "explanation": "Definition: A Linked List stores items as connected nodes.\nWhy It Matters: It teaches flexible data storage with references.\nReal World Example: Like clues where each clue points to the next.",
+        "difficulty": "Beginner",
+        "estimated_time": "3 hours",
+        "prerequisites": [
+            {"topic": "Arrays", "why": "Arrays make it easier to compare indexed storage with linked storage."},
+            {"topic": "Pointers", "why": "Linked Lists depend on references from one node to another."},
+        ],
+        "next_topics": [
+            {"topic": "Stack", "why": "Stacks can be implemented using linked nodes."},
+            {"topic": "Queue", "why": "Queues help apply linked list operations in order-based problems."},
+            {"topic": "Binary Tree", "why": "Tree nodes also connect through references."},
+        ],
+        "related_topics": [
+            {"topic": "Doubly Linked List", "why": "It extends Linked List by connecting nodes forward and backward."},
+            {"topic": "Circular Linked List", "why": "It shows how linked structures can loop back to the start."},
+        ],
+    },
     "Recursion": {
         "topic": "Recursion",
-        "explanation": "Recursion is solving a problem by breaking it into smaller versions of itself.",
-        "analogy": "It is like opening nested boxes until you reach the smallest box, then closing them back up.",
+        "definition": "Recursion solves a problem by having a function call itself on smaller cases.",
+        "why_it_matters": "It makes problems like trees, folders, and repeated patterns easier to solve.",
+        "example": "Like opening nested boxes until you reach the smallest box.",
+        "explanation": "Definition: Recursion solves a problem by calling itself on smaller cases.\nWhy It Matters: It makes repeated patterns easier to solve.\nReal World Example: Like opening nested boxes one by one.",
         "difficulty": "Beginner",
         "estimated_time": "3 hours",
         "prerequisites": [
@@ -72,8 +101,10 @@ CURATED_ROADMAPS = {
     },
     "Operating System": {
         "topic": "Operating System",
-        "explanation": "An Operating System manages hardware, memory, files, and programs so users can run applications.",
-        "analogy": "It is like a manager that assigns rooms, tools, and schedules to workers.",
+        "definition": "An Operating System manages the computer's hardware, files, memory, and running programs.",
+        "why_it_matters": "It lets apps run smoothly without users controlling hardware directly.",
+        "example": "Like a manager assigning time, space, and tools to workers.",
+        "explanation": "Definition: An Operating System manages hardware, files, memory, and programs.\nWhy It Matters: It lets apps run smoothly.\nReal World Example: Like a manager assigning tools and schedules.",
         "difficulty": "Intermediate",
         "estimated_time": "8 hours",
         "prerequisites": [
@@ -88,10 +119,33 @@ CURATED_ROADMAPS = {
             {"topic": "File Systems", "why": "File systems organize data on storage devices."}
         ],
     },
+    "HashMap": {
+        "topic": "HashMap",
+        "definition": "A HashMap stores data as key-value pairs so you can find values quickly by key.",
+        "why_it_matters": "It makes searching, counting, and lookup problems much faster.",
+        "example": "Like a contact list where a name helps you instantly find a phone number.",
+        "explanation": "Definition: A HashMap stores key-value pairs.\nWhy It Matters: It gives fast lookup by key.\nReal World Example: Like finding a phone number by a person's name.",
+        "difficulty": "Beginner",
+        "estimated_time": "3 hours",
+        "prerequisites": [
+            {"topic": "Arrays", "why": "HashMaps often use array-like storage behind the scenes."},
+            {"topic": "Hash Function", "why": "A hash function decides where each key should be stored."},
+        ],
+        "next_topics": [
+            {"topic": "HashSet", "why": "HashSet uses similar hashing ideas to store unique values."},
+            {"topic": "Collision Handling", "why": "Collisions explain what happens when keys land in the same place."},
+        ],
+        "related_topics": [
+            {"topic": "Dictionary", "why": "Many languages use dictionary-style structures like HashMap."},
+            {"topic": "Time Complexity", "why": "HashMap performance is usually described using time complexity."},
+        ],
+    },
     "Machine Learning": {
         "topic": "Machine Learning",
-        "explanation": "Machine Learning teaches computers to find patterns in data and make predictions.",
-        "analogy": "It is like learning from examples instead of following only fixed instructions.",
+        "definition": "Machine Learning helps computers learn patterns from data and make predictions.",
+        "why_it_matters": "It powers recommendations, image recognition, chatbots, and many AI tools.",
+        "example": "Like learning to identify spam emails after seeing many examples.",
+        "explanation": "Definition: Machine Learning helps computers learn patterns from data.\nWhy It Matters: It powers predictions and AI tools.\nReal World Example: Like learning to spot spam emails from examples.",
         "difficulty": "Intermediate",
         "estimated_time": "10 hours",
         "prerequisites": [
@@ -125,8 +179,11 @@ def fallback_roadmap(topic):
         clean_topic,
         {
             "topic": clean_topic,
-            "explanation": f"{clean_topic} is an important study topic. Learn the basics first, then practice with examples.",
-            "analogy": "Think of it as one step in a larger learning path.",
+            "definition": f"{clean_topic} is an important concept that helps you solve a specific type of problem.",
+            "why_it_matters": "It gives you a foundation for learning related topics more easily.",
+            "example": "Like learning one tool before using it in a bigger project.",
+            "explanation": f"Definition: {clean_topic} is an important concept for solving specific problems.\nWhy It Matters: It supports related topics.\nReal World Example: Like learning one tool before using it in a bigger project.",
+            "analogy": "Like learning one tool before using it in a bigger project.",
             "difficulty": "Beginner",
             "estimated_time": "2-4 hours",
             "prerequisites": [],
@@ -148,7 +205,10 @@ def validate_roadmap(data, requested_topic):
 
     cleaned = {
         "topic": topic,
-        "explanation": (data.get("explanation") or fallback_roadmap(topic)["explanation"])[:360],
+        "definition": data.get("definition") or fallback_roadmap(topic).get("definition"),
+        "why_it_matters": data.get("why_it_matters") or fallback_roadmap(topic).get("why_it_matters"),
+        "example": data.get("example") or fallback_roadmap(topic).get("example"),
+        "explanation": "",
         "analogy": data.get("analogy") or "Think of it as one step in a larger learning path.",
         "difficulty": data.get("difficulty") or "Beginner",
         "estimated_time": data.get("estimated_time") or "2-4 hours",
@@ -156,6 +216,7 @@ def validate_roadmap(data, requested_topic):
         "next_topics": [],
         "related_topics": [],
     }
+    cleaned["explanation"] = format_explanation(cleaned)
 
     for key in ("prerequisites", "next_topics", "related_topics"):
         topics = filter_valid_topics(
@@ -174,7 +235,33 @@ def validate_roadmap(data, requested_topic):
                 }
             )
 
+    curated = fallback_roadmap(cleaned["topic"])
+    if curated.get("topic") == cleaned["topic"]:
+        for key in ("prerequisites", "next_topics", "related_topics"):
+            add_curated_items(cleaned, curated, key)
+
     return cleaned
+
+
+def add_curated_items(cleaned, curated, key):
+    """Fill weak AI sections with trusted beginner roadmap items."""
+    existing = {item["topic"].lower() for item in cleaned.get(key, [])}
+
+    for item in curated.get(key, []):
+        if len(cleaned[key]) >= 5:
+            break
+
+        topic_name = item.get("topic", "")
+        if not topic_name or topic_name.lower() in existing:
+            continue
+
+        cleaned[key].append(
+            {
+                "topic": topic_name,
+                "why": item.get("why") or f"{topic_name} supports {cleaned['topic']}.",
+            }
+        )
+        existing.add(topic_name.lower())
 
 
 def generate_roadmap_with_ai(topic, context_text=None):
@@ -187,8 +274,11 @@ Context:
 Return JSON only:
 {{
   "topic": "real educational topic",
-  "explanation": "2-3 line beginner explanation",
-  "analogy": "simple real-world analogy",
+  "definition": "simple definition in plain English",
+  "why_it_matters": "why this topic matters",
+  "example": "real world example",
+  "explanation": "Definition: ...\\nWhy It Matters: ...\\nReal World Example: ...",
+  "analogy": "simple analogy",
   "difficulty": "Beginner | Intermediate | Advanced",
   "estimated_time": "study time",
   "prerequisites": [
@@ -207,6 +297,10 @@ Rules:
 - Return ONLY real study concepts.
 - Do not include random words, generic nouns, sentence fragments, adjectives, or verbs.
 - Reject words like Elements, Initial, Specified, Grow, Creates, Size.
+- Explanation must have exactly 3 short sections: Definition, Why It Matters, Real World Example.
+- Use simple English. Avoid jargon where possible.
+- Recommend only true prerequisites, meaningful next topics, and useful related topics.
+- Every recommendation must include a clear reason.
 """
     response_text, error = safe_groq_generate(ROADMAP_SYSTEM_PROMPT, user_prompt)
 
@@ -223,12 +317,27 @@ Rules:
     return validate_roadmap(data, topic)
 
 
+def format_explanation(data):
+    definition = (data.get("definition") or "").strip()
+    why = (data.get("why_it_matters") or "").strip()
+    example = (data.get("example") or data.get("analogy") or "").strip()
+
+    return "\n".join(
+        [
+            f"Definition: {definition}",
+            f"Why It Matters: {why}",
+            f"Real World Example: {example}",
+        ]
+    )
+
+
 def get_or_create_roadmap(topic, context_text=None, force_refresh=False):
     clean_topic = normalize_topic_name(topic)
 
     if not force_refresh:
         cached = fetch_roadmap_from_neo4j(clean_topic)
         if cached:
+            cached = validate_roadmap(cached, clean_topic)
             cached["cached"] = True
             return cached
 
@@ -236,4 +345,3 @@ def get_or_create_roadmap(topic, context_text=None, force_refresh=False):
     save_roadmap_to_neo4j(roadmap)
     roadmap["cached"] = False
     return roadmap
-

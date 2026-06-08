@@ -216,9 +216,11 @@ def register_routes(app):
     @login_required
     def quiz():
         topic = request.args.get("topic", latest_result.get("topic", ""))
+        started = request.args.get("started") == "1"
         return render_template(
             "quiz.html",
-            quiz=latest_quiz,
+            quiz=latest_quiz if started else [],
+            setup_only=not started,
             topic=topic,
             difficulty=session.get("quiz_difficulty", "easy"),
             duration=session.get("quiz_duration", 3),
@@ -256,7 +258,7 @@ def register_routes(app):
             topic,
             f"{session['quiz_difficulty'].title()} quiz for {session['quiz_duration']} minutes",
         )
-        return redirect(url_for("quiz", topic=topic))
+        return redirect(url_for("quiz", topic=topic, started=1))
 
     @app.route("/quiz/submit", methods=["POST"])
     @login_required

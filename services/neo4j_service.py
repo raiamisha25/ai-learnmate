@@ -311,6 +311,9 @@ def fetch_roadmap_from_neo4j(topic):
                     RETURN topic.name AS topic,
                            topic.explanation AS explanation,
                            topic.analogy AS analogy,
+                           coalesce(topic.definition, "") AS definition,
+                           coalesce(topic.why_it_matters, "") AS why_it_matters,
+                           coalesce(topic.example, "") AS example,
                            topic.difficulty AS difficulty,
                            topic.estimated_time AS estimated_time
                     LIMIT 1
@@ -347,6 +350,9 @@ def fetch_roadmap_from_neo4j(topic):
             "topic": topic_record["topic"],
             "explanation": topic_record["explanation"],
             "analogy": topic_record["analogy"],
+            "definition": topic_record["definition"],
+            "why_it_matters": topic_record["why_it_matters"],
+            "example": topic_record["example"],
             "difficulty": topic_record["difficulty"],
             "estimated_time": topic_record["estimated_time"],
             "prerequisites": clean_items(relation_records["prerequisites"]),
@@ -367,6 +373,9 @@ def save_roadmap_to_neo4j(roadmap):
                     MERGE (topic:Concept {name: $topic})
                     SET topic.explanation = $explanation,
                         topic.analogy = $analogy,
+                        topic.definition = $definition,
+                        topic.why_it_matters = $why_it_matters,
+                        topic.example = $example,
                         topic.difficulty = $difficulty,
                         topic.estimated_time = $estimated_time,
                         topic.roadmap_cached = true
@@ -374,6 +383,9 @@ def save_roadmap_to_neo4j(roadmap):
                     topic=roadmap["topic"],
                     explanation=roadmap.get("explanation"),
                     analogy=roadmap.get("analogy"),
+                    definition=roadmap.get("definition"),
+                    why_it_matters=roadmap.get("why_it_matters"),
+                    example=roadmap.get("example"),
                     difficulty=roadmap.get("difficulty"),
                     estimated_time=roadmap.get("estimated_time"),
                 )

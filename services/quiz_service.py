@@ -167,6 +167,8 @@ def generate_quiz_comments(topic, difficulty, score, level):
     system_prompt = """
 You write short, funny, family-friendly learning feedback.
 Return JSON only.
+Every value must be maximum 20 words.
+No stories. No paragraphs. Maximum 2 short lines.
 """
     user_prompt = f"""
 Topic: {topic}
@@ -180,19 +182,30 @@ Return JSON only:
   "motivational_comment": "one encouraging sentence",
   "topic_joke": "one topic-specific family-friendly joke"
 }}
+
+Rules:
+- Each comment must be playful, motivational, and topic-aware.
+- Maximum 20 words per comment.
+- No long paragraphs.
+- Emojis are optional.
 """
     response_text, error = safe_groq_generate(system_prompt, user_prompt, max_tokens=400)
 
     if error:
         print(f"Quiz comment generation failed: {error}")
         return {
-            "funny_comment": f"{topic} is officially paying attention to you now.",
+            "funny_comment": f"{topic} is starting to respect you.",
             "motivational_comment": "Keep practicing. Every attempt sharpens the idea.",
-            "topic_joke": f"{topic} walked into a quiz and left with better study habits.",
+            "topic_joke": "Your neurons deserve a promotion.",
         }
 
     try:
-        return json.loads(response_text.strip().replace("```json", "").replace("```", ""))
+        comments = json.loads(response_text.strip().replace("```json", "").replace("```", ""))
+        return {
+            "funny_comment": short_comment(comments.get("funny_comment")),
+            "motivational_comment": short_comment(comments.get("motivational_comment")),
+            "topic_joke": short_comment(comments.get("topic_joke")),
+        }
     except (json.JSONDecodeError, TypeError) as exc:
         print(f"Quiz comment generation failed: could not parse JSON: {exc}")
         return {
@@ -200,3 +213,8 @@ Return JSON only:
             "motivational_comment": "Nice work. Keep the streak alive.",
             "topic_joke": "Your neurons just asked for a coffee break.",
         }
+
+
+def short_comment(text):
+    words = (text or "").replace("\n", " ").split()
+    return " ".join(words[:20])
