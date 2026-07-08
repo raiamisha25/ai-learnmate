@@ -22,6 +22,7 @@ from services.neo4j_service import fetch_graph_from_neo4j, fetch_topic_suggestio
 from services.pdf_service import extract_text_from_pdf
 from services.quiz_service import calculate_level, generate_quiz, generate_quiz_comments
 from services.goal_service import build_goal_roadmap
+from services.roadmap_page_service import build_learning_journey
 from services.study_service import process_input
 from utils.errors import AppError
 
@@ -213,12 +214,54 @@ def register_routes(app):
 
     @app.route("/study-path")
     def study_path():
+        adaptive_data = dashboard_data(g.user["id"]) if g.get("user") else None
+        journey = None
+
+        if adaptive_data and adaptive_data.get("goals"):
+            goals = adaptive_data["goals"]
+            goal_id = request.args.get("goal_id", type=int)
+            topic_filter = request.args.get("topic")
+            target_goal = None
+
+            if goal_id:
+                target_goal = next((goal for goal in goals if goal["id"] == goal_id), None)
+
+            if not target_goal and topic_filter:
+                target_goal = next(
+                    (
+                        goal
+                        for goal in goals
+                        if any(
+                            item["topic"].lower() == topic_filter.lower()
+                            for item in goal["progress"]["topics"]
+                        )
+                    ),
+                    None,
+                )
+
+            if not target_goal:
+                target_goal = next(
+                    (goal for goal in goals if goal["status"] == "Active"), goals[0]
+                )
+
+            journey = build_learning_journey(target_goal)
+            journey["goals"] = [
+                {"id": goal["id"], "title": goal["title"], "status": goal["status"]}
+                for goal in goals
+            ]
+
+        if journey:
+            return render_template(
+                "study_path.html",
+                journey=journey,
+                neo4j_status=neo4j_status,
+            )
+
         if latest_result:
             return render_template("result.html", result=latest_result)
 
         graph_data = fetch_graph_from_neo4j()
         suggestions = fetch_topic_suggestions()
-        adaptive_data = dashboard_data(g.user["id"]) if g.get("user") else None
 
         if graph_data.get("nodes") or suggestions:
             return render_template(

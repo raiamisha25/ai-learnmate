@@ -17,7 +17,11 @@
         <ol class="timeline">
           {% for item in data.recent_history %}
             <li>
-              <strong>{{ item.topic or item.action_type.replace('_', ' ').title() }}</strong>
+              {% if item.topic %}
+                <a href="{{ url_for('study_path', topic=item.topic) }}"><strong>{{ item.topic }}</strong></a>
+              {% else %}
+                <strong>{{ item.action_type.replace('_', ' ').title() }}</strong>
+              {% endif %}
               <span>{{ item.details or item.action_type.replace('_', ' ').title() }}</span>
             </li>
           {% endfor %}
@@ -56,7 +60,7 @@
         {% for item in data.performance_history %}
           <div class="study-item">
             <div class="study-item-heading">
-              <h3>{{ item.topic }}</h3>
+              <h3><a href="{{ url_for('study_path', topic=item.topic) }}">{{ item.topic }}</a></h3>
               <span class="status-pill status-{{ 'needs-revision' if item.revision_recommended else item.strength }}">
                 {{ 'Needs Revision' if item.revision_recommended else item.strength|title }}
               </span>

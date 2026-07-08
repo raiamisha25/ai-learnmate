@@ -1,8 +1,138 @@
 {% extends "base.html" %}
 
-{% block title %}Learning Guide{% endblock %}
+{% block title %}Learning Journey{% endblock %}
 
 {% block content %}
+  {% if journey %}
+    <section class="page-header">
+      <p class="eyebrow">Learning Journey</p>
+      <h1>{{ journey.roadmap_name }}</h1>
+      <p class="muted">Your step-by-step path through this roadmap, one topic at a time.</p>
+    </section>
+
+    {% if journey.goals|length > 1 %}
+      <div class="journey-goal-switch actions compact">
+        {% for goal_option in journey.goals %}
+          <a
+            class="button {{ 'secondary' if goal_option.id != journey.goal_id else '' }}"
+            href="{{ url_for('study_path', goal_id=goal_option.id) }}"
+          >{{ goal_option.title }}</a>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    <section class="card roadmap-progress-card">
+      <div class="section-title">
+        <div>
+          <p class="eyebrow">Roadmap Progress</p>
+          <h2>{{ journey.roadmap_name }}</h2>
+        </div>
+        <div class="score-ring small" style="--score: {{ journey.completion_percentage }}%">
+          <span>{{ journey.completion_percentage }}%</span>
+        </div>
+      </div>
+
+      <div class="progress-track">
+        <div class="progress-bar" style="width: {{ journey.completion_percentage }}%"></div>
+      </div>
+
+      <div class="roadmap-progress-stats">
+        <div>
+          <span class="muted">Topics Completed</span>
+          <strong>{{ journey.completed_topics }} / {{ journey.total_topics }}</strong>
+        </div>
+        <div>
+          <span class="muted">Estimated Remaining Time</span>
+          <strong>{{ journey.estimated_remaining_time }}</strong>
+        </div>
+        <div>
+          <span class="muted">Current Topic</span>
+          <strong>{{ journey.current_topic.topic if journey.current_topic else "All topics completed" }}</strong>
+        </div>
+        <div>
+          <span class="muted">Recommended Next</span>
+          <strong>{{ journey.recommended_next.topic if journey.recommended_next else "Nothing queued" }}</strong>
+        </div>
+      </div>
+
+      {% if journey.is_complete %}
+        <p class="message success">You've completed every topic in this roadmap. Great work!</p>
+      {% endif %}
+    </section>
+
+    <section class="journey-track">
+      {% for item in journey.topics %}
+        <div class="journey-node journey-node-{{ item.journey_status|lower }}">
+          <div class="journey-node-marker">
+            {% if item.journey_status == "Completed" %}
+              <span class="journey-icon">✓</span>
+            {% elif item.journey_status == "Current" %}
+              <span class="journey-icon">●</span>
+            {% else %}
+              <span class="journey-icon">🔒</span>
+            {% endif %}
+          </div>
+
+          <div class="card topic-journey-card">
+            <div class="study-item-heading">
+              <div>
+                <h3>{{ item.topic }}</h3>
+                {% if item.journey_status == "Current" %}
+                  <span class="status-pill status-learning">Current</span>
+                {% elif item.journey_status == "Completed" %}
+                  <span class="status-pill status-mastered">Completed</span>
+                {% else %}
+                  <span class="status-pill status-not-started">Locked</span>
+                {% endif %}
+              </div>
+            </div>
+
+            <div class="topic-journey-meta">
+              <div>
+                <span class="muted">Difficulty</span>
+                <strong>{{ item.difficulty }}</strong>
+              </div>
+              <div>
+                <span class="muted">Estimated Time</span>
+                <strong>{{ item.estimated_time }}</strong>
+              </div>
+              <div>
+                <span class="muted">Interview Importance</span>
+                <strong>{{ item.interview_importance }}</strong>
+              </div>
+            </div>
+
+            <p><span class="muted">Why this topic:</span> {{ item.why }}</p>
+
+            <p>
+              <span class="muted">Prerequisites:</span>
+              {% if item.prerequisites %}
+                {{ item.prerequisites|join(", ") }}
+              {% else %}
+                None
+              {% endif %}
+            </p>
+
+            <div class="actions compact">
+              {% if item.journey_status == "Completed" %}
+                <a class="button secondary" href="{{ url_for('topic', topic=item.topic) }}">Review Topic</a>
+              {% elif item.journey_status == "Current" %}
+                <a class="button" href="{{ url_for('quiz', topic=item.topic) }}">Start Learning</a>
+              {% else %}
+                <span class="button secondary" aria-disabled="true">Locked</span>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+        {% if not loop.last %}
+          <div class="journey-connector" aria-hidden="true"></div>
+        {% endif %}
+      {% endfor %}
+    </section>
+  {% endif %}
+
+  {% if not journey %}
   <section class="page-header">
     <p class="eyebrow">Learning Guide</p>
     <h1>Your saved study paths</h1>
@@ -131,5 +261,6 @@
         <a class="button secondary" href="{{ url_for('topic') }}">Find Topic</a>
       </div>
     </section>
+  {% endif %}
   {% endif %}
 {% endblock %}

@@ -370,6 +370,131 @@ body.dark .review-item {
   font-weight: 900;
 }
 
+.score-ring.small {
+  width: 76px;
+  height: 76px;
+  margin-top: 0;
+  flex-shrink: 0;
+}
+
+.score-ring.small span {
+  width: 54px;
+  height: 54px;
+  font-size: 13px;
+}
+
+/* Learning Journey page */
+
+.journey-goal-switch {
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+
+.roadmap-progress-card .section-title {
+  align-items: center;
+}
+
+.roadmap-progress-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 18px;
+  margin-top: 20px;
+}
+
+.roadmap-progress-stats > div {
+  display: grid;
+  gap: 6px;
+}
+
+.roadmap-progress-stats strong {
+  font-size: 18px;
+}
+
+.journey-track {
+  display: grid;
+  justify-items: center;
+  gap: 0;
+  margin-top: 28px;
+}
+
+.journey-node {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 640px);
+  gap: 16px;
+  width: 100%;
+  max-width: 700px;
+  align-items: start;
+}
+
+.journey-node-marker {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 2px solid var(--line);
+  background: var(--card);
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.journey-node-completed .journey-node-marker {
+  border-color: #22c55e;
+  color: #166534;
+  background: #dcfce7;
+}
+
+.journey-node-current .journey-node-marker {
+  border-color: var(--primary);
+  color: #ffffff;
+  background: var(--primary);
+}
+
+.journey-node-locked .journey-node-marker {
+  color: var(--muted);
+  background: #eef2f7;
+}
+
+.journey-connector {
+  width: 2px;
+  height: 28px;
+  margin-left: 23px;
+  background: var(--line);
+}
+
+.topic-journey-card {
+  width: 100%;
+}
+
+.journey-node-locked .topic-journey-card {
+  opacity: 0.7;
+}
+
+.journey-node-current .topic-journey-card {
+  border-color: var(--primary);
+}
+
+.topic-journey-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 14px;
+  margin: 14px 0;
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.topic-journey-meta > div {
+  display: grid;
+  gap: 4px;
+}
+
+.topic-journey-card .actions.compact span.button[aria-disabled="true"] {
+  cursor: not-allowed;
+  background: #eef2f7;
+  color: var(--muted);
+}
+
 .timeline {
   display: grid;
   gap: 14px;
