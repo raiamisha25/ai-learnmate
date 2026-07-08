@@ -726,6 +726,43 @@ body.dark .review-item {
   color: var(--text);
 }
 
+.continue-card,
+.performance-card {
+  display: grid;
+  gap: 18px;
+}
+
+.continue-card-body,
+.performance-card-body {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+  align-items: center;
+}
+
+.continue-card-body div {
+  display: grid;
+  gap: 4px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f8fbff;
+}
+
+.continue-card-body span {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.continue-card-body strong {
+  color: var(--text);
+  font-size: 20px;
+}
+
+.performance-card-body {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
 .topic-status-card {
   display: grid;
   gap: 18px;
@@ -794,6 +831,7 @@ body.dark .roadmap-note,
 body.dark .roadmap-item,
 body.dark .quiz-result-panel,
 body.dark .progress-state-list span,
+body.dark .continue-card-body div,
 body.dark .topic-status-group {
   background: #111827;
 }
@@ -1114,6 +1152,10 @@ body.dark .topic-status-group {
   }
 
   .leaderboard-row {
+    grid-template-columns: 1fr;
+  }
+
+  .performance-card-body {
     grid-template-columns: 1fr;
   }
 

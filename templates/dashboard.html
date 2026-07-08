@@ -9,6 +9,7 @@
       <a href="{{ url_for('dashboard') }}">Overview</a>
       <a href="{{ url_for('goals') }}">Goals</a>
       <a href="{{ url_for('history') }}">History</a>
+      <a href="{{ url_for('study_path') }}">Learning Journey</a>
       <a href="{{ url_for('topic') }}">Find Topic</a>
       <a href="{{ url_for('upload') }}">Upload PDF</a>
       <a href="{{ url_for('leaderboard_page') }}">Leaderboard</a>
@@ -19,7 +20,7 @@
         <div>
           <p class="eyebrow">Personal Learning Space</p>
           <h1>Welcome, {{ g.user.username }}</h1>
-          <p class="muted">Your progress, recent topics, and next steps are gathered here.</p>
+          <p class="muted">Continue the right topic, revise what needs attention, and track how you are performing.</p>
         </div>
         <div class="actions compact">
           <a class="button" href="{{ url_for('goals') }}">Create Goal</a>
@@ -48,7 +49,7 @@
           <strong>{{ data.completed }}</strong>
         </div>
         <div class="card metric-card">
-          <span>Roadmap Completion</span>
+          <span>Overall Progress</span>
           <strong>{{ data.roadmap_completion }}%</strong>
           <div class="progress-track small">
             <div class="progress-bar" style="width: {{ data.roadmap_completion }}%"></div>
@@ -56,116 +57,48 @@
         </div>
       </section>
 
-      <section class="card">
+      {% set current_goal = data.active_goals[0] if data.active_goals else None %}
+      {% set current_item = data.continue_learning[0] if data.continue_learning else (data.progress[0] if data.progress else None) %}
+      {% set current_roadmap_name = current_goal.title if current_goal else "Personal Learning Journey" %}
+      {% set current_topic = current_goal.recommended_next_topic if current_goal and current_goal.recommended_next_topic else (current_item.topic if current_item else None) %}
+      {% set current_progress = current_goal.completion_percentage if current_goal else (current_item.completion_percentage if current_item else 0) %}
+
+      <section class="card continue-card">
         <div class="section-title">
           <div>
-            <p class="eyebrow">Active Goals</p>
-            <h2>Goal Progress</h2>
+            <p class="eyebrow">Continue Learning</p>
+            <h2>Pick up where you left off</h2>
           </div>
-          <a class="button secondary" href="{{ url_for('goals') }}">Manage Goals</a>
         </div>
-        {% if data.active_goals %}
-          <div class="goal-list compact-goal-list">
-            {% for goal in data.active_goals %}
-              <div class="goal-card compact-goal-card">
-                <div class="study-item-heading">
-                  <div>
-                    <h3>{{ goal.title }}</h3>
-                    <p>Recommended Next Topic: <strong>{{ goal.recommended_next_topic or "All topics completed" }}</strong></p>
-                  </div>
-                  <span class="status-pill status-learning">{{ goal.status }}</span>
-                </div>
-                <div class="progress-track small">
-                  <div class="progress-bar" style="width: {{ goal.completion_percentage }}%"></div>
-                </div>
-                <p>{{ goal.completion_percentage }}% complete</p>
-                {% if goal.recommended_next_topic %}
-                  <a class="button secondary" href="{{ url_for('quiz', topic=goal.recommended_next_topic) }}">Start Next Quiz</a>
-                {% endif %}
-              </div>
-            {% endfor %}
+        <div class="continue-card-body">
+          <div>
+            <span>Current roadmap</span>
+            <strong>{{ current_roadmap_name }}</strong>
           </div>
-        {% else %}
-          <p class="muted">Create a learning goal to track a complete roadmap.</p>
-        {% endif %}
-      </section>
-
-      <section class="dashboard-grid">
-        <div class="card">
-          <p class="eyebrow">Adaptive Roadmap</p>
-          <h2>Ready To Learn</h2>
-          {% if data.ready_to_learn %}
-            <div class="study-list">
-              {% for item in data.ready_to_learn %}
-                <div class="study-item">
-                  <div class="study-item-heading">
-                    <h3>{{ item.topic }}</h3>
-                    <span class="status-pill status-ready-to-learn">Ready To Learn</span>
-                  </div>
-                  <p>{{ item.reason }}</p>
-                  <a class="button secondary" href="{{ url_for('topic', topic=item.topic) }}">Open Guide</a>
-                </div>
-              {% endfor %}
-            </div>
-          {% else %}
-            <p class="muted">Ready topics appear when prerequisites are mastered.</p>
-          {% endif %}
+          <div>
+            <span>Current topic</span>
+            <strong>{{ current_topic or "Choose a topic to begin" }}</strong>
+          </div>
+          <div>
+            <span>Progress</span>
+            <strong>{{ current_progress }}%</strong>
+          </div>
         </div>
-
-        <div class="card">
-          <p class="eyebrow">Adaptive Roadmap</p>
-          <h2>Recommended Next</h2>
-          {% if data.recommended_next %}
-            <div class="study-list compact-study-list">
-              {% for item in data.recommended_next %}
-                <div class="study-item compact-study-item">
-                  <div class="study-item-heading">
-                    <h3>{{ item.topic }}</h3>
-                    <span class="status-pill status-recommended-next">Recommended Next</span>
-                  </div>
-                  <p>{{ item.reason }}</p>
-                  <a class="button secondary" href="{{ url_for('quiz', topic=item.topic) }}">Start Quiz</a>
-                </div>
-              {% endfor %}
-            </div>
-          {% else %}
-            <p class="muted">Next-topic recommendations unlock after completed prerequisites.</p>
-          {% endif %}
+        <div class="progress-track small">
+          <div class="progress-bar" style="width: {{ current_progress }}%"></div>
+        </div>
+        <div class="actions compact">
+          <a class="button" href="{{ url_for('quiz', topic=current_topic) if current_topic else url_for('topic') }}">Continue</a>
+          <a class="button secondary" href="{{ url_for('study_path') }}">View Roadmap</a>
         </div>
       </section>
 
-      <section class="dashboard-grid">
-        <div class="card">
-          <div class="section-title">
-            <div>
-              <p class="eyebrow">Continue Learning</p>
-              <h2>Pick up where you left off</h2>
-            </div>
-          </div>
-          {% if data.continue_learning %}
-            <div class="study-list">
-              {% for item in data.continue_learning %}
-                <div class="study-item">
-                  <div class="study-item-heading">
-                    <h3>{{ item.topic }}</h3>
-                    <span class="status-pill status-{{ item.display_status|lower|replace(' ', '-') }}">{{ item.display_status }}</span>
-                  </div>
-                  <div class="progress-track small">
-                    <div class="progress-bar" style="width: {{ item.completion_percentage }}%"></div>
-                  </div>
-                  <p>{{ item.completion_percentage }}% complete</p>
-                  <a class="button secondary" href="{{ url_for('quiz', topic=item.topic) }}">Practice Quiz</a>
-                </div>
-              {% endfor %}
-            </div>
-          {% else %}
-            <p class="muted">No active topics yet. Search a topic or upload a PDF to begin.</p>
-          {% endif %}
-        </div>
-
-        <div class="card">
+      <section class="card performance-card">
+        <div>
           <p class="eyebrow">Progress States</p>
-          <h2>Your learning map</h2>
+          <h2>Performance Snapshot</h2>
+        </div>
+        <div class="performance-card-body">
           <div class="progress-state-list">
             <span><b>{{ data.tracked_topics }}</b> Tracked</span>
             <span><b>{{ data.continue_learning|length }}</b> Learning</span>
@@ -284,38 +217,6 @@
         {% endif %}
       </section>
 
-      <section class="dashboard-grid">
-        <div class="card">
-          <p class="eyebrow">Failed Topics</p>
-          <h2>Needs another pass</h2>
-          {% if data.failed_topics %}
-            <ul class="mini-list">
-              {% for item in data.failed_topics %}
-                <li>{{ item.topic }} - last score {{ item.last_score }}%</li>
-              {% endfor %}
-            </ul>
-          {% else %}
-            <p class="muted">No failed topics. Nice steady start.</p>
-          {% endif %}
-        </div>
-
-        <div class="card">
-          <p class="eyebrow">Recent Activity</p>
-          <h2>Timeline</h2>
-          {% if data.recent_history %}
-            <ol class="timeline">
-              {% for item in data.recent_history %}
-                <li>
-                  <strong>{{ item.topic or item.action_type.replace('_', ' ').title() }}</strong>
-                  <span>{{ item.details or item.action_type.replace('_', ' ').title() }}</span>
-                </li>
-              {% endfor %}
-            </ol>
-          {% else %}
-            <p class="muted">Your learning activity will appear here.</p>
-          {% endif %}
-        </div>
-      </section>
     </div>
   </section>
 {% endblock %}
