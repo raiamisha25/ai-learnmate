@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+
+{% block title %}Learning Goals{% endblock %}
+
+{% block content %}
+  <section class="page-header">
+    <p class="eyebrow">Goals</p>
+    <h1>Goal-based learning</h1>
+    <p class="muted">Create a goal and AI LearnMate will build a roadmap, track progress, and recommend the next topic.</p>
+  </section>
+
+  <section class="dashboard-grid">
+    <div class="card">
+      <p class="eyebrow">Create Goal</p>
+      <h2>Start a learning path</h2>
+      <form id="goal-form" class="topic-form" method="POST" action="{{ url_for('goals') }}">
+        <label for="goal">Goal</label>
+        <input id="goal" name="goal" type="text" placeholder="Example: Machine Learning">
+        <button type="submit">Create Goal</button>
+      </form>
+
+      <div id="loading" class="loading">
+        <span class="spinner"></span>
+        Building roadmap...
+      </div>
+
+      {% if error %}
+        <div class="message error">{{ error }}</div>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <p class="eyebrow">Examples</p>
+      <h2>Popular goals</h2>
+      <div class="topic-cloud goal-examples">
+        {% for item in ["Learn Python", "Backend Development", "Data Science", "Machine Learning", "UPSC", "GATE", "CAT", "Learn Spanish", "Cybersecurity"] %}
+          <button class="topic-pill goal-chip" type="button" data-goal="{{ item }}">{{ item }}</button>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <p class="eyebrow">Active Goals</p>
+    <h2>Goal Progress</h2>
+    {% if data.goals %}
+      <div class="goal-list">
+        {% for goal in data.goals %}
+          <div class="goal-card">
+            <div class="study-item-heading">
+              <div>
+                <h3>{{ goal.title }}</h3>
+                <p>Recommended Next Topic: <strong>{{ goal.recommended_next_topic or "All topics completed" }}</strong></p>
+              </div>
+              <span class="status-pill status-{{ 'mastered' if goal.status == 'Completed' else 'learning' }}">{{ goal.status }}</span>
+            </div>
+
+            <div class="progress-track small">
+              <div class="progress-bar" style="width: {{ goal.completion_percentage }}%"></div>
+            </div>
+            <p>{{ goal.completion_percentage }}% complete</p>
+
+            <div class="goal-roadmap">
+              {% for topic in goal.progress.topics %}
+                <div class="goal-topic {% if not topic.available %}locked{% endif %}">
+                  <span>{{ topic.order }}</span>
+                  <div>
+                    <strong>{{ topic.topic }}</strong>
+                    <p>
+                      {{ topic.status }}
+                      {% if topic.missing_prerequisites %}
+                        - unlock after {{ topic.missing_prerequisites|join(", ") }}
+                      {% endif %}
+                    </p>
+                  </div>
+                  {% if topic.available and topic.status != "Mastered" %}
+                    <a class="button secondary" href="{{ url_for('quiz', topic=topic.topic) }}">Quiz</a>
+                  {% endif %}
+                </div>
+              {% endfor %}
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="muted">Create your first goal to see a personalized roadmap.</p>
+    {% endif %}
+  </section>
+
+  <script>
+    const goalInput = document.getElementById("goal");
+    document.querySelectorAll(".goal-chip").forEach((button) => {
+      button.addEventListener("click", () => {
+        goalInput.value = button.dataset.goal;
+        goalInput.focus();
+      });
+    });
+  </script>
+{% endblock %}

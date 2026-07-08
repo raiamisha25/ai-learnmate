@@ -7,6 +7,7 @@
     <aside class="sidebar card">
       <p class="eyebrow">Dashboard</p>
       <a href="{{ url_for('dashboard') }}">Overview</a>
+      <a href="{{ url_for('goals') }}">Goals</a>
       <a href="{{ url_for('history') }}">History</a>
       <a href="{{ url_for('topic') }}">Find Topic</a>
       <a href="{{ url_for('upload') }}">Upload PDF</a>
@@ -20,7 +21,10 @@
           <h1>Welcome, {{ g.user.username }}</h1>
           <p class="muted">Your progress, recent topics, and next steps are gathered here.</p>
         </div>
-        <a class="button" href="{{ url_for('topic') }}">Study a Topic</a>
+        <div class="actions compact">
+          <a class="button" href="{{ url_for('goals') }}">Create Goal</a>
+          <a class="button secondary" href="{{ url_for('topic') }}">Study a Topic</a>
+        </div>
       </section>
 
       <section class="metric-grid">
@@ -50,6 +54,40 @@
             <div class="progress-bar" style="width: {{ data.roadmap_completion }}%"></div>
           </div>
         </div>
+      </section>
+
+      <section class="card">
+        <div class="section-title">
+          <div>
+            <p class="eyebrow">Active Goals</p>
+            <h2>Goal Progress</h2>
+          </div>
+          <a class="button secondary" href="{{ url_for('goals') }}">Manage Goals</a>
+        </div>
+        {% if data.active_goals %}
+          <div class="goal-list compact-goal-list">
+            {% for goal in data.active_goals %}
+              <div class="goal-card compact-goal-card">
+                <div class="study-item-heading">
+                  <div>
+                    <h3>{{ goal.title }}</h3>
+                    <p>Recommended Next Topic: <strong>{{ goal.recommended_next_topic or "All topics completed" }}</strong></p>
+                  </div>
+                  <span class="status-pill status-learning">{{ goal.status }}</span>
+                </div>
+                <div class="progress-track small">
+                  <div class="progress-bar" style="width: {{ goal.completion_percentage }}%"></div>
+                </div>
+                <p>{{ goal.completion_percentage }}% complete</p>
+                {% if goal.recommended_next_topic %}
+                  <a class="button secondary" href="{{ url_for('quiz', topic=goal.recommended_next_topic) }}">Start Next Quiz</a>
+                {% endif %}
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="muted">Create a learning goal to track a complete roadmap.</p>
+        {% endif %}
       </section>
 
       <section class="dashboard-grid">

@@ -13,6 +13,7 @@
         <a href="{{ url_for('home') }}">Home</a>
         {% if g.user %}
           <a href="{{ url_for('dashboard') }}">Dashboard</a>
+          <a href="{{ url_for('goals') }}">Goals</a>
           <a href="{{ url_for('history') }}">History</a>
         {% endif %}
         <a href="{{ url_for('upload') }}">Upload</a>
@@ -64,6 +65,7 @@
 
       bindLoadingForm("upload-form");
       bindLoadingForm("topic-form");
+      bindLoadingForm("goal-form");
 
       const themeToggle = document.getElementById("theme-toggle");
       const savedTheme = localStorage.getItem("learnmate-theme");

@@ -1,4 +1,5 @@
 import os
+import json
 import sqlite3
 from datetime import datetime, timedelta
 
@@ -159,6 +160,20 @@ def init_db():
                 FOREIGN KEY (user_id) REFERENCES users(id),
                 FOREIGN KEY (quiz_attempt_id) REFERENCES quiz_attempts(id)
             );
+
+            CREATE TABLE IF NOT EXISTS learning_goals (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                title TEXT NOT NULL,
+                roadmap TEXT NOT NULL,
+                progress TEXT,
+                completion_percentage REAL DEFAULT 0,
+                recommended_next_topic TEXT,
+                status TEXT NOT NULL DEFAULT 'Active',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            );
             """
         )
         ensure_column(connection, "quiz_attempts", "level", "TEXT")
@@ -174,6 +189,10 @@ def init_db():
         ensure_column(connection, "topic_scores", "trend", "TEXT DEFAULT 'Stable'")
         ensure_column(connection, "topic_scores", "low_score_streak", "INTEGER DEFAULT 0")
         ensure_column(connection, "topic_scores", "revision_recommended", "INTEGER DEFAULT 0")
+        ensure_column(connection, "learning_goals", "progress", "TEXT")
+        ensure_column(connection, "learning_goals", "completion_percentage", "REAL DEFAULT 0")
+        ensure_column(connection, "learning_goals", "recommended_next_topic", "TEXT")
+        ensure_column(connection, "learning_goals", "status", "TEXT NOT NULL DEFAULT 'Active'")
         migrate_progress_statuses(connection)
 
 
@@ -288,7 +307,7 @@ def topic_performance_summary(user_id, topic):
         SELECT accuracy
         FROM quiz_attempts
         WHERE user_id = ? AND topic = ?
-        ORDER BY created_at DESC
+        ORDER BY created_at DESC, id DESC
         LIMIT 5
         """,
         (user_id, topic),
@@ -326,6 +345,166 @@ def roadmap_item(topic, source=None, reason=None, score=None, trend="Stable", st
         "trend": trend or "Stable",
         "status": status,
     }
+
+
+def goal_topic_progress(topic_name, progress_by_key, score_by_key):
+    progress = progress_by_key.get(topic_key(topic_name))
+    score = score_by_key.get(topic_key(topic_name))
+    status = PROGRESS_NOT_STARTED
+    completion = 0
+
+    if progress:
+        status = normalize_progress_status(progress["status"], progress["last_score"])
+        completion = float(progress.get("completion_percentage") or roadmap_percentage(status, progress["last_score"]))
+
+    if score and (score["strength"] == "weak" or bool(score["revision_recommended"])):
+        status = "Needs Revision"
+    elif score and score["strength"] == "strong":
+        status = PROGRESS_MASTERED
+        completion = 100
+
+    return {
+        "status": status,
+        "completion_percentage": round(completion, 1),
+        "score": float(score["average_score"]) if score else None,
+        "trend": score["trend"] if score else "Stable",
+        "needs_revision": bool(score["revision_recommended"]) if score else False,
+    }
+
+
+def enrich_goal(goal, normalized_progress, topic_scores):
+    roadmap = json.loads(goal["roadmap"] or "{}")
+    topics = roadmap.get("topics", [])
+    progress_by_key = {topic_key(item["topic"]): item for item in normalized_progress}
+    score_by_key = {topic_key(item["topic"]): item for item in topic_scores}
+    mastered_keys = {
+        topic_key(item["topic"])
+        for item in normalized_progress
+        if progress_is_mastered(item)
+    }
+    mastered_keys.update(topic_key(item["topic"]) for item in topic_scores if item["strength"] == "strong")
+    enriched_topics = []
+    recommended_next = None
+
+    for item in topics:
+        topic_name = item.get("topic")
+        topic_progress = goal_topic_progress(topic_name, progress_by_key, score_by_key)
+        prerequisites = item.get("prerequisites", [])
+        missing_prerequisites = [
+            prereq for prereq in prerequisites if topic_key(prereq) not in mastered_keys
+        ]
+        is_available = not missing_prerequisites
+
+        enriched_item = {
+            **item,
+            **topic_progress,
+            "available": is_available,
+            "missing_prerequisites": missing_prerequisites,
+        }
+        enriched_topics.append(enriched_item)
+
+        if not recommended_next and is_available and topic_progress["status"] != PROGRESS_MASTERED:
+            recommended_next = topic_name
+
+    if enriched_topics:
+        completion = round(
+            sum(item["completion_percentage"] for item in enriched_topics) / len(enriched_topics),
+            1,
+        )
+    else:
+        completion = 0
+
+    progress_payload = {
+        "topics": enriched_topics,
+        "completed_topics": len([item for item in enriched_topics if item["status"] == PROGRESS_MASTERED]),
+        "total_topics": len(enriched_topics),
+    }
+    status = "Completed" if completion >= 100 and enriched_topics else "Active"
+
+    return {
+        **dict(goal),
+        "roadmap": roadmap,
+        "progress": progress_payload,
+        "completion_percentage": completion,
+        "recommended_next_topic": recommended_next,
+        "status": status,
+    }
+
+
+def refresh_goal_progress(goal, enriched_goal):
+    run_query(
+        """
+        UPDATE learning_goals
+        SET progress = ?, completion_percentage = ?, recommended_next_topic = ?,
+            status = ?, updated_at = ?
+        WHERE id = ?
+        """,
+        (
+            json.dumps(enriched_goal["progress"]),
+            enriched_goal["completion_percentage"],
+            enriched_goal["recommended_next_topic"],
+            enriched_goal["status"],
+            now_text(),
+            goal["id"],
+        ),
+        commit=True,
+    )
+
+
+def create_learning_goal(user_id, title, roadmap):
+    if not user_id or not title or not roadmap:
+        return None
+
+    created_at = now_text()
+    cursor = run_query(
+        """
+        INSERT INTO learning_goals
+            (
+                user_id, title, roadmap, progress, completion_percentage,
+                recommended_next_topic, status, created_at, updated_at
+            )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            user_id,
+            title,
+            json.dumps(roadmap),
+            json.dumps({"topics": [], "completed_topics": 0, "total_topics": 0}),
+            0,
+            None,
+            "Active",
+            created_at,
+            created_at,
+        ),
+        commit=True,
+    )
+
+    for item in roadmap.get("topics", []):
+        upsert_topic_progress(user_id, item.get("topic"), PROGRESS_NOT_STARTED, score=0)
+
+    add_history(user_id, "goal_created", title, "Created a learning goal")
+    return cursor.lastrowid
+
+
+def user_goals(user_id, normalized_progress=None, topic_scores=None, limit=None):
+    query = "SELECT * FROM learning_goals WHERE user_id = ? ORDER BY updated_at DESC"
+    params = [user_id]
+
+    if limit:
+        query += " LIMIT ?"
+        params.append(limit)
+
+    rows = run_query(query, tuple(params), fetchall=True)
+    normalized_progress = normalized_progress if normalized_progress is not None else []
+    topic_scores = topic_scores if topic_scores is not None else []
+    goals = []
+
+    for row in rows:
+        enriched = enrich_goal(row, normalized_progress, topic_scores)
+        refresh_goal_progress(row, enriched)
+        goals.append(enriched)
+
+    return goals
 
 
 def adaptive_roadmap_data(saved_topics, normalized_progress, topic_scores):
@@ -782,7 +961,7 @@ def dashboard_data(user_id):
         SELECT *
         FROM performance_history
         WHERE user_id = ?
-        ORDER BY created_at DESC
+        ORDER BY created_at DESC, id DESC
         LIMIT 10
         """,
         (user_id,),
@@ -857,6 +1036,8 @@ def dashboard_data(user_id):
         for item in normalized_progress
         if item["status"] != PROGRESS_MASTERED and float(item.get("last_score") or 0) < 50
     ][:5]
+    goals = user_goals(user_id, normalized_progress, topic_scores)
+    active_goals = [goal for goal in goals if goal["status"] == "Active"][:5]
     recommended = []
     roadmap_completion = 0
     adaptive_roadmap = adaptive_roadmap_data(saved_topics, normalized_progress, topic_scores)
@@ -893,6 +1074,8 @@ def dashboard_data(user_id):
         "continue_learning": continue_learning,
         "recently_studied": recently_studied,
         "mastered_topics": mastered_topics,
+        "goals": goals,
+        "active_goals": active_goals,
         "ready_to_learn": adaptive_roadmap["ready_to_learn"],
         "recommended_next": adaptive_roadmap["recommended_next"],
         "recommended": recommended[:5],

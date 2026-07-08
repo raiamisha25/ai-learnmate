@@ -7,6 +7,7 @@ from werkzeug.utils import secure_filename
 from auth.helpers import authenticate_user, login_required, login_user, logout_user
 from database.db import (
     add_history,
+    create_learning_goal,
     create_user,
     dashboard_data,
     leaderboard,
@@ -20,6 +21,7 @@ from services.ambiguity_service import check_topic_ambiguity
 from services.neo4j_service import fetch_graph_from_neo4j, fetch_topic_suggestions
 from services.pdf_service import extract_text_from_pdf
 from services.quiz_service import calculate_level, generate_quiz, generate_quiz_comments
+from services.goal_service import build_goal_roadmap
 from services.study_service import process_input
 from utils.errors import AppError
 
@@ -106,6 +108,24 @@ def register_routes(app):
     def history():
         data = dashboard_data(g.user["id"])
         return render_template("history.html", data=data)
+
+    @app.route("/goals", methods=["GET", "POST"])
+    @login_required
+    def goals():
+        error = None
+
+        if request.method == "POST":
+            goal_title = request.form.get("goal", "").strip()
+
+            if not goal_title:
+                error = "Please enter a learning goal."
+            else:
+                roadmap = build_goal_roadmap(goal_title)
+                create_learning_goal(g.user["id"], roadmap["goal"], roadmap)
+                return redirect(url_for("dashboard"))
+
+        data = dashboard_data(g.user["id"])
+        return render_template("goals.html", data=data, error=error)
 
     @app.route("/leaderboard")
     def leaderboard_page():
