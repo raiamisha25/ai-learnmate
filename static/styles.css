@@ -726,6 +726,51 @@ body.dark .review-item {
   color: var(--text);
 }
 
+.topic-status-card {
+  display: grid;
+  gap: 18px;
+}
+
+.topic-status-groups {
+  display: grid;
+  gap: 14px;
+}
+
+.topic-status-group {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f8fbff;
+}
+
+.topic-status-group summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 16px;
+  color: var(--text);
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.topic-status-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  padding: 0 16px 16px;
+}
+
+.topic-status-item {
+  display: grid;
+  gap: 14px;
+  align-content: space-between;
+  background: var(--card);
+}
+
+.topic-status-item .button {
+  width: fit-content;
+}
+
 .roadmap-note,
 .roadmap-item {
   padding: 14px;
@@ -748,7 +793,8 @@ body.dark .review-item {
 body.dark .roadmap-note,
 body.dark .roadmap-item,
 body.dark .quiz-result-panel,
-body.dark .progress-state-list span {
+body.dark .progress-state-list span,
+body.dark .topic-status-group {
   background: #111827;
 }
 

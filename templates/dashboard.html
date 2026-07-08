@@ -179,86 +179,109 @@
         </div>
       </section>
 
-      <section class="dashboard-grid">
-        <div class="card">
-          <p class="eyebrow">Recently Studied</p>
-          <h2>Latest topic progress</h2>
-          {% if data.recently_studied %}
-            <div class="study-list compact-study-list">
-              {% for item in data.recently_studied %}
-                <div class="study-item compact-study-item">
-                  <div class="study-item-heading">
-                    <h3>{{ item.topic }}</h3>
-                    <span class="status-pill status-{{ item.display_status|lower|replace(' ', '-') }}">{{ item.display_status }}</span>
-                  </div>
-                  <div class="progress-track small">
-                    <div class="progress-bar" style="width: {{ item.completion_percentage }}%"></div>
-                  </div>
-                </div>
-              {% endfor %}
-            </div>
-          {% else %}
-            <p class="muted">Recently studied topics will appear here.</p>
-          {% endif %}
+      <section class="card topic-status-card">
+        <div class="section-title">
+          <div>
+            <p class="eyebrow">Topic Status</p>
+            <h2>Current topic progress</h2>
+          </div>
         </div>
 
-        <div class="card">
-          <p class="eyebrow">Recommended Revision Quizzes</p>
-          <h2>Practice what needs another pass</h2>
-          {% if data.revision_quizzes %}
-            <div class="study-list compact-study-list">
-              {% for item in data.revision_quizzes %}
-                <div class="study-item compact-study-item">
-                  <div class="study-item-heading">
-                    <h3>{{ item.topic }}</h3>
-                    <span class="status-pill status-needs-revision">Needs Revision</span>
-                  </div>
-                  <p>{{ item.trend }} trend - {{ item.average_score }}% average</p>
-                  <a
-                    class="button secondary"
-                    href="{{ url_for('quiz', topic=item.topic, difficulty=item.difficulty, duration=item.duration, revision=1) }}"
-                  >Revision Quiz</a>
-                </div>
-              {% endfor %}
-            </div>
-          {% else %}
-            <p class="muted">Revision quizzes appear automatically after repeated low scores.</p>
-          {% endif %}
-        </div>
-      </section>
+        {% if data.progress %}
+          <div class="topic-status-groups">
+            <details class="topic-status-group" open>
+              <summary>
+                <span>Needs Revision</span>
+              </summary>
+              <div class="topic-status-grid">
+                {% set revision_group = namespace(count=0) %}
+                {% for item in data.progress %}
+                  {% if item.display_status == "Needs Revision" %}
+                    {% set revision_group.count = revision_group.count + 1 %}
+                    <div class="study-item topic-status-item">
+                      <div class="study-item-heading">
+                        <h3>{{ item.topic }}</h3>
+                        <span class="status-pill status-needs-revision">{{ item.display_status }}</span>
+                      </div>
+                      <div>
+                        <div class="progress-track small">
+                          <div class="progress-bar" style="width: {{ item.completion_percentage }}%"></div>
+                        </div>
+                        <p>{{ item.completion_percentage }}% complete</p>
+                      </div>
+                      <a class="button" href="{{ url_for('quiz', topic=item.topic, revision=1) }}">Practice</a>
+                    </div>
+                  {% endif %}
+                {% endfor %}
+                {% if revision_group.count == 0 %}
+                  <p class="muted">No topics need revision right now.</p>
+                {% endif %}
+              </div>
+            </details>
 
-      <section class="dashboard-grid">
-        <div class="card">
-          <p class="eyebrow">Weak Topics</p>
-          <h2>Review these</h2>
-          {% if data.weak_topics %}
-            <ul class="mini-list">
-              {% for item in data.weak_topics %}
-                <li>
-                  {{ item.topic }} - {{ item.average_score }}%
-                  <span class="trend-label">{{ item.trend }}</span>
-                  {% if item.revision_recommended %}<b>Needs Revision</b>{% endif %}
-                </li>
-              {% endfor %}
-            </ul>
-          {% else %}
-            <p class="muted">No weak topics yet. Take quizzes to build your profile.</p>
-          {% endif %}
-        </div>
+            <details class="topic-status-group" open>
+              <summary>
+                <span>Learning</span>
+              </summary>
+              <div class="topic-status-grid">
+                {% set learning_group = namespace(count=0) %}
+                {% for item in data.progress %}
+                  {% if item.display_status != "Needs Revision" and item.status in ("Learning", "Practicing") %}
+                    {% set learning_group.count = learning_group.count + 1 %}
+                    <div class="study-item topic-status-item">
+                      <div class="study-item-heading">
+                        <h3>{{ item.topic }}</h3>
+                        <span class="status-pill status-{{ item.display_status|lower|replace(' ', '-') }}">{{ item.display_status }}</span>
+                      </div>
+                      <div>
+                        <div class="progress-track small">
+                          <div class="progress-bar" style="width: {{ item.completion_percentage }}%"></div>
+                        </div>
+                        <p>{{ item.completion_percentage }}% complete</p>
+                      </div>
+                      <a class="button" href="{{ url_for('quiz', topic=item.topic) }}">Continue</a>
+                    </div>
+                  {% endif %}
+                {% endfor %}
+                {% if learning_group.count == 0 %}
+                  <p class="muted">No active learning topics yet.</p>
+                {% endif %}
+              </div>
+            </details>
 
-        <div class="card">
-          <p class="eyebrow">Mastered Topics</p>
-          <h2>Topics you own now</h2>
-          {% if data.strong_topics %}
-            <ul class="mini-list">
-              {% for item in data.strong_topics %}
-                <li>{{ item.topic }} - {{ item.average_score }}% <span class="trend-label">{{ item.trend }}</span></li>
-              {% endfor %}
-            </ul>
-          {% else %}
-            <p class="muted">Mastered topics appear after scoring 85% or more.</p>
-          {% endif %}
-        </div>
+            <details class="topic-status-group" open>
+              <summary>
+                <span>Mastered</span>
+              </summary>
+              <div class="topic-status-grid">
+                {% set mastered_group = namespace(count=0) %}
+                {% for item in data.progress %}
+                  {% if item.display_status != "Needs Revision" and item.status == "Mastered" %}
+                    {% set mastered_group.count = mastered_group.count + 1 %}
+                    <div class="study-item topic-status-item">
+                      <div class="study-item-heading">
+                        <h3>{{ item.topic }}</h3>
+                        <span class="status-pill status-mastered">{{ item.display_status }}</span>
+                      </div>
+                      <div>
+                        <div class="progress-track small">
+                          <div class="progress-bar" style="width: {{ item.completion_percentage }}%"></div>
+                        </div>
+                        <p>{{ item.completion_percentage }}% complete</p>
+                      </div>
+                      <a class="button" href="{{ url_for('topic', topic=item.topic) }}">Review</a>
+                    </div>
+                  {% endif %}
+                {% endfor %}
+                {% if mastered_group.count == 0 %}
+                  <p class="muted">Mastered topics appear after strong quiz results.</p>
+                {% endif %}
+              </div>
+            </details>
+          </div>
+        {% else %}
+          <p class="muted">No tracked topics yet. Search a topic or upload a PDF to begin.</p>
+        {% endif %}
       </section>
 
       <section class="dashboard-grid">
