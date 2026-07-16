@@ -486,6 +486,122 @@ def create_learning_goal(user_id, title, roadmap):
     return cursor.lastrowid
 
 
+def goal_topic_names(goal):
+    roadmap = json.loads(goal["roadmap"] or "{}")
+    return [
+        item.get("topic")
+        for item in roadmap.get("topics", [])
+        if item.get("topic")
+    ]
+
+
+def reset_goal_topic_data(user_id, topics):
+    topics = [topic for topic in topics if topic]
+    if not topics:
+        return
+
+    placeholders = ",".join("?" for _ in topics)
+    params = (user_id, *topics)
+
+    run_query(
+        f"DELETE FROM performance_history WHERE user_id = ? AND topic IN ({placeholders})",
+        params,
+        commit=True,
+    )
+    run_query(
+        f"DELETE FROM quiz_attempts WHERE user_id = ? AND topic IN ({placeholders})",
+        params,
+        commit=True,
+    )
+    run_query(
+        f"DELETE FROM topic_scores WHERE user_id = ? AND topic IN ({placeholders})",
+        params,
+        commit=True,
+    )
+    run_query(
+        f"DELETE FROM user_quiz_levels WHERE user_id = ? AND topic IN ({placeholders})",
+        params,
+        commit=True,
+    )
+    run_query(
+        f"DELETE FROM user_progress WHERE user_id = ? AND topic IN ({placeholders})",
+        params,
+        commit=True,
+    )
+    run_query(
+        f"DELETE FROM learning_history WHERE user_id = ? AND topic IN ({placeholders})",
+        params,
+        commit=True,
+    )
+
+
+def reset_learning_goal(user_id, goal_id):
+    goal = run_query(
+        "SELECT * FROM learning_goals WHERE id = ? AND user_id = ?",
+        (goal_id, user_id),
+        fetchone=True,
+    )
+
+    if not goal:
+        return False
+
+    topics = goal_topic_names(goal)
+    reset_goal_topic_data(user_id, topics)
+    run_query(
+        "DELETE FROM learning_history WHERE user_id = ? AND topic = ?",
+        (user_id, goal["title"]),
+        commit=True,
+    )
+
+    for topic in topics:
+        upsert_topic_progress(user_id, topic, PROGRESS_NOT_STARTED, score=0)
+
+    run_query(
+        """
+        UPDATE learning_goals
+        SET progress = ?, completion_percentage = ?, recommended_next_topic = ?,
+            status = ?, updated_at = ?
+        WHERE id = ? AND user_id = ?
+        """,
+        (
+            json.dumps({"topics": [], "completed_topics": 0, "total_topics": 0}),
+            0,
+            None,
+            "Active",
+            now_text(),
+            goal_id,
+            user_id,
+        ),
+        commit=True,
+    )
+    add_history(user_id, "goal_reset", goal["title"], "Reset learning goal")
+    return True
+
+
+def delete_learning_goal(user_id, goal_id):
+    goal = run_query(
+        "SELECT * FROM learning_goals WHERE id = ? AND user_id = ?",
+        (goal_id, user_id),
+        fetchone=True,
+    )
+
+    if not goal:
+        return False
+
+    reset_goal_topic_data(user_id, goal_topic_names(goal))
+    run_query(
+        "DELETE FROM learning_history WHERE user_id = ? AND topic = ?",
+        (user_id, goal["title"]),
+        commit=True,
+    )
+    run_query(
+        "DELETE FROM learning_goals WHERE id = ? AND user_id = ?",
+        (goal_id, user_id),
+        commit=True,
+    )
+    return True
+
+
 def user_goals(user_id, normalized_progress=None, topic_scores=None, limit=None):
     query = "SELECT * FROM learning_goals WHERE user_id = ? ORDER BY updated_at DESC"
     params = [user_id]
@@ -930,7 +1046,7 @@ def save_quiz_attempt(
     }
 
 
-def dashboard_data(user_id):
+def dashboard_data(user_id, include_adaptive_sections=True):
     topic_count = run_query(
         "SELECT COUNT(*) AS total FROM saved_topics WHERE user_id = ?",
         (user_id,),
@@ -941,11 +1057,7 @@ def dashboard_data(user_id):
         (user_id,),
         fetchall=True,
     )
-    recent_history = run_query(
-        "SELECT * FROM learning_history WHERE user_id = ? ORDER BY created_at DESC LIMIT 8",
-        (user_id,),
-        fetchall=True,
-    )
+    recent_history = []
     quiz_attempts = run_query(
         "SELECT * FROM quiz_attempts WHERE user_id = ? ORDER BY created_at DESC LIMIT 6",
         (user_id,),
@@ -956,37 +1068,19 @@ def dashboard_data(user_id):
         (user_id,),
         fetchall=True,
     )
-    performance_history = run_query(
-        """
-        SELECT *
-        FROM performance_history
-        WHERE user_id = ?
-        ORDER BY created_at DESC, id DESC
-        LIMIT 10
-        """,
-        (user_id,),
-        fetchall=True,
-    )
+    performance_history = []
     progress = run_query(
         "SELECT * FROM user_progress WHERE user_id = ? ORDER BY updated_at DESC",
         (user_id,),
         fetchall=True,
     )
 
-    score_by_topic = {item["topic"]: item for item in topic_scores}
     normalized_progress = []
     for item in progress:
-        topic_score = score_by_topic.get(item["topic"])
-        display_status = normalize_progress_status(item["status"], item["last_score"])
-
-        if topic_score and (topic_score["strength"] == "weak" or bool(topic_score["revision_recommended"])):
-            display_status = "Needs Revision"
-
         normalized_progress.append(
             {
                 **dict(item),
                 "status": normalize_progress_status(item["status"], item["last_score"]),
-                "display_status": display_status,
                 "completion_percentage": item["completion_percentage"]
                 if "completion_percentage" in item.keys()
                 else roadmap_percentage(item["status"], item["last_score"]),
@@ -994,7 +1088,6 @@ def dashboard_data(user_id):
         )
 
     total_topics = topic_count["total"] if topic_count else 0
-    tracked_topics = len(normalized_progress)
     completed = len([item for item in normalized_progress if item["status"] == PROGRESS_MASTERED])
     average_accuracy = 0
 
@@ -1004,43 +1097,92 @@ def dashboard_data(user_id):
             1,
         )
 
-    weak_topics = [item for item in topic_scores if item["strength"] == "weak"][:5]
-    strong_topics = [item for item in topic_scores if item["strength"] == "strong"][:5]
-    needs_revision = [
-        item
-        for item in topic_scores
-        if item["strength"] == "weak" or bool(item["revision_recommended"])
-    ][:5]
-    revision_quizzes = [
-        {
-            "topic": item["topic"],
-            "average_score": item["average_score"],
-            "trend": item["trend"],
-            "low_score_streak": item["low_score_streak"],
-            "difficulty": "easy" if float(item["average_score"]) < 50 else "medium",
-            "duration": 3,
-        }
-        for item in needs_revision
-    ]
+    needs_revision = []
+    revision_quizzes = []
     continue_learning = [
         item
         for item in normalized_progress
         if item["status"] in (PROGRESS_LEARNING, PROGRESS_PRACTICING)
     ][:5]
-    recently_studied = normalized_progress[:5]
-    mastered_topics = [
-        item for item in normalized_progress if item["status"] == PROGRESS_MASTERED
-    ][:5]
-    failed_topics = [
-        item
-        for item in normalized_progress
-        if item["status"] != PROGRESS_MASTERED and float(item.get("last_score") or 0) < 50
-    ][:5]
     goals = user_goals(user_id, normalized_progress, topic_scores)
     active_goals = [goal for goal in goals if goal["status"] == "Active"][:5]
+    goal_completion = round(
+        sum(float(goal.get("completion_percentage") or 0) for goal in goals) / len(goals),
+        1,
+    ) if goals else 0
+    progress_topic_keys = {topic_key(item["topic"]) for item in normalized_progress}
+    score_topic_keys = {topic_key(item["topic"]) for item in topic_scores}
+    tracked_topic_keys = progress_topic_keys | score_topic_keys
+    needs_revision_keys = {
+        topic_key(item["topic"])
+        for item in topic_scores
+        if item["strength"] == "weak" or bool(item["revision_recommended"])
+    }
+    mastered_keys = {
+        topic_key(item["topic"])
+        for item in normalized_progress
+        if item["status"] == PROGRESS_MASTERED
+    }
+    mastered_keys.update(
+        topic_key(item["topic"]) for item in topic_scores if item["strength"] == "strong"
+    )
+    mastered_keys = mastered_keys & tracked_topic_keys
+    needs_revision_keys = needs_revision_keys & tracked_topic_keys
+    learning_keys = tracked_topic_keys - mastered_keys - needs_revision_keys
+    progress_total = len(tracked_topic_keys)
+    mastered_count = len(mastered_keys)
+    learning_count = len(learning_keys)
+    needs_revision_count = len(needs_revision_keys)
+    progress_stats = {
+        "mastered": mastered_count,
+        "learning": learning_count,
+        "needs_revision": needs_revision_count,
+        "total": progress_total,
+        "mastered_percentage": round((mastered_count / progress_total) * 100, 1) if progress_total else 0,
+        "learning_percentage": round((learning_count / progress_total) * 100, 1) if progress_total else 0,
+        "needs_revision_percentage": round((needs_revision_count / progress_total) * 100, 1) if progress_total else 0,
+    }
     recommended = []
     roadmap_completion = 0
-    adaptive_roadmap = adaptive_roadmap_data(saved_topics, normalized_progress, topic_scores)
+    ready_to_learn = []
+    recommended_next = []
+
+    if include_adaptive_sections:
+        recent_history = run_query(
+            "SELECT * FROM learning_history WHERE user_id = ? ORDER BY created_at DESC LIMIT 8",
+            (user_id,),
+            fetchall=True,
+        )
+        performance_history = run_query(
+            """
+            SELECT *
+            FROM performance_history
+            WHERE user_id = ?
+            ORDER BY created_at DESC, id DESC
+            LIMIT 10
+            """,
+            (user_id,),
+            fetchall=True,
+        )
+        needs_revision = [
+            item
+            for item in topic_scores
+            if item["strength"] == "weak" or bool(item["revision_recommended"])
+        ][:5]
+        revision_quizzes = [
+            {
+                "topic": item["topic"],
+                "average_score": item["average_score"],
+                "trend": item["trend"],
+                "low_score_streak": item["low_score_streak"],
+                "difficulty": "easy" if float(item["average_score"]) < 50 else "medium",
+                "duration": 3,
+            }
+            for item in needs_revision
+        ]
+        adaptive_roadmap = adaptive_roadmap_data(saved_topics, normalized_progress, topic_scores)
+        ready_to_learn = adaptive_roadmap["ready_to_learn"]
+        recommended_next = adaptive_roadmap["recommended_next"]
 
     if normalized_progress:
         roadmap_completion = round(
@@ -1049,10 +1191,11 @@ def dashboard_data(user_id):
             1,
         )
 
-    for topic in saved_topics:
-        for next_topic in (topic["after_topics"] or "").splitlines():
-            if next_topic and next_topic not in recommended:
-                recommended.append(next_topic)
+    if include_adaptive_sections:
+        for topic in saved_topics:
+            for next_topic in (topic["after_topics"] or "").splitlines():
+                if next_topic and next_topic not in recommended:
+                    recommended.append(next_topic)
 
     return {
         "saved_topics": saved_topics,
@@ -1062,22 +1205,19 @@ def dashboard_data(user_id):
         "performance_history": performance_history,
         "progress": normalized_progress,
         "total_topics": total_topics,
-        "tracked_topics": tracked_topics,
         "completed": completed,
         "roadmap_completion": roadmap_completion,
         "average_accuracy": average_accuracy,
-        "weak_topics": weak_topics,
-        "failed_topics": failed_topics,
-        "strong_topics": strong_topics,
         "needs_revision": needs_revision,
         "revision_quizzes": revision_quizzes,
         "continue_learning": continue_learning,
-        "recently_studied": recently_studied,
-        "mastered_topics": mastered_topics,
         "goals": goals,
         "active_goals": active_goals,
-        "ready_to_learn": adaptive_roadmap["ready_to_learn"],
-        "recommended_next": adaptive_roadmap["recommended_next"],
+        "goal_completion": goal_completion,
+        "goal_remaining": round(100 - goal_completion, 1) if goals else 0,
+        "progress_stats": progress_stats,
+        "ready_to_learn": ready_to_learn,
+        "recommended_next": recommended_next,
         "recommended": recommended[:5],
         "streak": learning_streak(user_id),
     }

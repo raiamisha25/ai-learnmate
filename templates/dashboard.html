@@ -57,6 +57,51 @@
         </div>
       </section>
 
+      <section class="card goals-management-card">
+        <div class="section-title">
+          <div>
+            <p class="eyebrow">Goals</p>
+            <h2>Learning goals</h2>
+          </div>
+          <a class="button secondary" href="{{ url_for('goals') }}">Create Goal</a>
+        </div>
+
+        {% if data.goals %}
+          <div class="goal-list">
+            {% for goal in data.goals %}
+              <div class="goal-row">
+                <div class="goal-row-main">
+                  <div class="study-item-heading">
+                    <h3>{{ goal.title }}</h3>
+                    <span class="status-pill status-{{ 'mastered' if goal.status == 'Completed' else 'learning' }}">{{ goal.status }}</span>
+                  </div>
+                  <p class="muted">
+                    Current level:
+                    <strong>{{ goal.recommended_next_topic or "Level 1" }}</strong>
+                  </p>
+                  <div class="progress-track small">
+                    <div class="progress-bar" style="width: {{ goal.completion_percentage }}%"></div>
+                  </div>
+                  <p class="muted">{{ goal.completion_percentage }}% complete</p>
+                </div>
+
+                <div class="goal-actions">
+                  <a class="button" href="{{ url_for('study_path', goal_id=goal.id) }}">Start Goal</a>
+                  <form method="post" action="{{ url_for('reset_goal', goal_id=goal.id) }}" onsubmit="return confirm('Are you sure you want to reset this goal?');">
+                    <button class="button secondary" type="submit">Reset Goal</button>
+                  </form>
+                  <form method="post" action="{{ url_for('delete_goal', goal_id=goal.id) }}" onsubmit="return confirm('Are you sure you want to delete this goal?');">
+                    <button class="button danger" type="submit">Delete Goal</button>
+                  </form>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="muted">No learning goals yet. Create one to build a personalized roadmap.</p>
+        {% endif %}
+      </section>
+
       {% set current_goal = data.active_goals[0] if data.active_goals else None %}
       {% set current_item = data.continue_learning[0] if data.continue_learning else (data.progress[0] if data.progress else None) %}
       {% set current_roadmap_name = current_goal.title if current_goal else "Personal Learning Journey" %}
@@ -93,128 +138,55 @@
         </div>
       </section>
 
-      <section class="card performance-card">
+      {% set mastered_count = data.progress_stats.mastered %}
+      {% set learning_count = data.progress_stats.learning %}
+      {% set revision_count = data.progress_stats.needs_revision %}
+      {% set total_count = data.progress_stats.total %}
+      {% set mastered_pct = data.progress_stats.mastered_percentage %}
+      {% set learning_pct = data.progress_stats.learning_percentage %}
+      {% set revision_pct = data.progress_stats.needs_revision_percentage %}
+
+      <section class="card progress-stats-card horizontal">
         <div>
-          <p class="eyebrow">Progress States</p>
-          <h2>Performance Snapshot</h2>
+          <p class="eyebrow">Progress Stats</p>
+          <h2>Your Learning Map</h2>
         </div>
-        <div class="performance-card-body">
-          <div class="progress-state-list">
-            <span><b>{{ data.tracked_topics }}</b> Tracked</span>
-            <span><b>{{ data.continue_learning|length }}</b> Learning</span>
-            <span><b>{{ data.mastered_topics|length }}</b> Mastered</span>
-            <span><b>{{ data.needs_revision|length }}</b> Needs Revision</span>
+        <div class="progress-stats-layout">
+          <div
+            class="doughnut-chart"
+            style="--mastered: {{ mastered_pct }}%; --learning: {{ learning_pct }}%; --revision: {{ revision_pct }}%;"
+            aria-label="Learning progress chart"
+          >
+            <span>{{ total_count }}</span>
+            <small>Total</small>
           </div>
-
-          <div class="score-ring" style="--score: {{ data.roadmap_completion }}%">
-            <span>{{ data.roadmap_completion }}%</span>
+          <div class="progress-stat-list">
+            <div>
+              <span class="legend-dot mastered"></span>
+              <span class="stat-label">Mastered Topics</span>
+              <strong>{{ mastered_count }}</strong>
+              <small>{{ mastered_pct }}%</small>
+            </div>
+            <div>
+              <span class="legend-dot learning"></span>
+              <span class="stat-label">Learning Topics</span>
+              <strong>{{ learning_count }}</strong>
+              <small>{{ learning_pct }}%</small>
+            </div>
+            <div>
+              <span class="legend-dot revision"></span>
+              <span class="stat-label">Need Revision</span>
+              <strong>{{ revision_count }}</strong>
+              <small>{{ revision_pct }}%</small>
+            </div>
+            <div class="total-row">
+              <span class="legend-dot total"></span>
+              <span class="stat-label">Total Tracked</span>
+              <strong>{{ total_count }}</strong>
+              <small>{{ 100 if total_count else 0 }}%</small>
+            </div>
           </div>
         </div>
-      </section>
-
-      <section class="card topic-status-card">
-        <div class="section-title">
-          <div>
-            <p class="eyebrow">Topic Status</p>
-            <h2>Current topic progress</h2>
-          </div>
-        </div>
-
-        {% if data.progress %}
-          <div class="topic-status-groups">
-            <details class="topic-status-group" open>
-              <summary>
-                <span>Needs Revision</span>
-              </summary>
-              <div class="topic-status-grid">
-                {% set revision_group = namespace(count=0) %}
-                {% for item in data.progress %}
-                  {% if item.display_status == "Needs Revision" %}
-                    {% set revision_group.count = revision_group.count + 1 %}
-                    <div class="study-item topic-status-item">
-                      <div class="study-item-heading">
-                        <h3>{{ item.topic }}</h3>
-                        <span class="status-pill status-needs-revision">{{ item.display_status }}</span>
-                      </div>
-                      <div>
-                        <div class="progress-track small">
-                          <div class="progress-bar" style="width: {{ item.completion_percentage }}%"></div>
-                        </div>
-                        <p>{{ item.completion_percentage }}% complete</p>
-                      </div>
-                      <a class="button" href="{{ url_for('quiz', topic=item.topic, revision=1) }}">Practice</a>
-                    </div>
-                  {% endif %}
-                {% endfor %}
-                {% if revision_group.count == 0 %}
-                  <p class="muted">No topics need revision right now.</p>
-                {% endif %}
-              </div>
-            </details>
-
-            <details class="topic-status-group" open>
-              <summary>
-                <span>Learning</span>
-              </summary>
-              <div class="topic-status-grid">
-                {% set learning_group = namespace(count=0) %}
-                {% for item in data.progress %}
-                  {% if item.display_status != "Needs Revision" and item.status in ("Learning", "Practicing") %}
-                    {% set learning_group.count = learning_group.count + 1 %}
-                    <div class="study-item topic-status-item">
-                      <div class="study-item-heading">
-                        <h3>{{ item.topic }}</h3>
-                        <span class="status-pill status-{{ item.display_status|lower|replace(' ', '-') }}">{{ item.display_status }}</span>
-                      </div>
-                      <div>
-                        <div class="progress-track small">
-                          <div class="progress-bar" style="width: {{ item.completion_percentage }}%"></div>
-                        </div>
-                        <p>{{ item.completion_percentage }}% complete</p>
-                      </div>
-                      <a class="button" href="{{ url_for('quiz', topic=item.topic) }}">Continue</a>
-                    </div>
-                  {% endif %}
-                {% endfor %}
-                {% if learning_group.count == 0 %}
-                  <p class="muted">No active learning topics yet.</p>
-                {% endif %}
-              </div>
-            </details>
-
-            <details class="topic-status-group" open>
-              <summary>
-                <span>Mastered</span>
-              </summary>
-              <div class="topic-status-grid">
-                {% set mastered_group = namespace(count=0) %}
-                {% for item in data.progress %}
-                  {% if item.display_status != "Needs Revision" and item.status == "Mastered" %}
-                    {% set mastered_group.count = mastered_group.count + 1 %}
-                    <div class="study-item topic-status-item">
-                      <div class="study-item-heading">
-                        <h3>{{ item.topic }}</h3>
-                        <span class="status-pill status-mastered">{{ item.display_status }}</span>
-                      </div>
-                      <div>
-                        <div class="progress-track small">
-                          <div class="progress-bar" style="width: {{ item.completion_percentage }}%"></div>
-                        </div>
-                        <p>{{ item.completion_percentage }}% complete</p>
-                      </div>
-                      <a class="button" href="{{ url_for('topic', topic=item.topic) }}">Review</a>
-                    </div>
-                  {% endif %}
-                {% endfor %}
-                {% if mastered_group.count == 0 %}
-                  <p class="muted">Mastered topics appear after strong quiz results.</p>
-                {% endif %}
-              </div>
-            </details>
-          </div>
-        {% else %}
-          <p class="muted">No tracked topics yet. Search a topic or upload a PDF to begin.</p>
-        {% endif %}
       </section>
 
     </div>

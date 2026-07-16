@@ -10,7 +10,9 @@ from database.db import (
     create_learning_goal,
     create_user,
     dashboard_data,
+    delete_learning_goal,
     leaderboard,
+    reset_learning_goal,
     save_quiz_attempt,
     save_study_plan,
     save_uploaded_pdf,
@@ -101,7 +103,7 @@ def register_routes(app):
     @app.route("/dashboard")
     @login_required
     def dashboard():
-        data = dashboard_data(g.user["id"])
+        data = dashboard_data(g.user["id"], include_adaptive_sections=False)
         return render_template("dashboard.html", data=data)
 
     @app.route("/history")
@@ -127,6 +129,18 @@ def register_routes(app):
 
         data = dashboard_data(g.user["id"])
         return render_template("goals.html", data=data, error=error)
+
+    @app.route("/goals/<int:goal_id>/delete", methods=["POST"])
+    @login_required
+    def delete_goal(goal_id):
+        delete_learning_goal(g.user["id"], goal_id)
+        return redirect(url_for("dashboard"))
+
+    @app.route("/goals/<int:goal_id>/reset", methods=["POST"])
+    @login_required
+    def reset_goal(goal_id):
+        reset_learning_goal(g.user["id"], goal_id)
+        return redirect(url_for("dashboard"))
 
     @app.route("/leaderboard")
     def leaderboard_page():
