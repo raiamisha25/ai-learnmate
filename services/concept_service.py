@@ -23,6 +23,22 @@ Return ONLY valid JSON. Do not include markdown, prose, or comments.
 Only include domain-specific educational concepts, not random English words.
 """
 
+ALLOWED_RELATIONSHIPS = {
+    "PREREQUISITE",
+    "NEXT_TOPIC",
+    "PART_OF",
+    "USES",
+    "APPLICATION_OF",
+    "COMPARES_WITH",
+    "RELATED_TO",
+}
+
+RELATIONSHIP_CLASSIFICATION_SYSTEM_PROMPT = """
+You classify relationships between learning concepts.
+Return ONLY valid JSON. Do not include markdown, prose, or comments.
+Use only the allowed relationship labels.
+"""
+
 
 def clean_json_object(text):
     text = (text or "").strip()
@@ -147,36 +163,110 @@ def extract_key_concepts(summary):
     return concepts or extract_fallback_concepts(summary)
 
 
+def classify_relationships_with_ai(summary, concepts):
+    if len(concepts) < 2:
+        return []
+
+    user_prompt = f"""
+Classify meaningful relationships between these learning concepts.
+
+Allowed relationship labels:
+- PREREQUISITE
+- NEXT_TOPIC
+- PART_OF
+- USES
+- APPLICATION_OF
+- COMPARES_WITH
+- RELATED_TO
+
+Return ONLY JSON in this exact shape:
+{{
+  "relationships": [
+    {{"subject": "Binary Tree", "relation": "PREREQUISITE", "object": "Tree"}},
+    {{"subject": "Heap", "relation": "RELATED_TO", "object": "Priority Queue"}},
+    {{"subject": "Random Forest", "relation": "PREREQUISITE", "object": "Decision Tree"}}
+  ]
+}}
+
+Rules:
+- Use only the concepts listed below as subject and object values.
+- Store the relation as exactly one of the allowed labels.
+- Do not invent relationship labels.
+- Do not create relationships just because concepts appear next to each other.
+- Include only relationships that are supported by the study material or by standard educational dependency.
+- If no meaningful relationship exists, return {{"relationships":[]}}.
+
+Concepts:
+{json.dumps(concepts)}
+
+Study material:
+{(summary or "")[:7000]}
+"""
+    response_text, error = safe_groq_generate(
+        RELATIONSHIP_CLASSIFICATION_SYSTEM_PROMPT,
+        user_prompt,
+        max_tokens=1000,
+    )
+
+    if error:
+        print(f"AI relationship classification failed: {error}")
+        return []
+
+    try:
+        data = json.loads(clean_json_object(response_text))
+    except (json.JSONDecodeError, TypeError) as exc:
+        print(f"AI relationship classification returned invalid JSON: {exc}")
+        return []
+
+    relationships = data.get("relationships", []) if isinstance(data, dict) else []
+    if not isinstance(relationships, list):
+        return []
+
+    concept_lookup = {concept.lower(): concept for concept in concepts}
+    clean_relationships = []
+    seen_relationships = set()
+
+    for relationship in relationships:
+        if not isinstance(relationship, dict):
+            continue
+
+        subject = concept_lookup.get(str(relationship.get("subject", "")).strip().lower())
+        object_name = concept_lookup.get(str(relationship.get("object", "")).strip().lower())
+        relation = str(relationship.get("relation", "")).strip().upper()
+
+        if not subject or not object_name or subject == object_name:
+            continue
+        if relation not in ALLOWED_RELATIONSHIPS:
+            continue
+
+        relationship_key = (subject, relation, object_name)
+        if relationship_key in seen_relationships:
+            continue
+
+        seen_relationships.add(relationship_key)
+        clean_relationships.append(
+            {"subject": subject, "relation": relation, "object": object_name}
+        )
+
+    return clean_relationships
+
+
 def build_knowledge_graph(summary):
     concepts = validate_concepts(extract_key_concepts(summary), limit=10)
     graph = nx.MultiDiGraph()
-    edges = []
-    triples = []
-
-    graph.add_node("Summary", important=True)
 
     for index, concept in enumerate(concepts):
         graph.add_node(concept, important=index < 5)
 
-        relation = "EXPLAINS" if index < 3 else "RELATED_TO"
-        graph.add_edge("Summary", concept, relation=relation)
-        triples.append(("Summary", relation, concept))
-        edges.append({"subject": "Summary", "relation": relation, "object": concept})
+    edges = classify_relationships_with_ai(summary, concepts)
 
-    for index in range(len(concepts) - 1):
-        previous_concept = concepts[index]
-        next_concept = concepts[index + 1]
+    for edge in edges:
+        graph.add_edge(edge["subject"], edge["object"], relation=edge["relation"])
 
-        graph.add_edge(previous_concept, next_concept, relation="NEXT_TOPIC")
-        graph.add_edge(next_concept, previous_concept, relation="PREREQUISITE")
-        triples.append((previous_concept, "NEXT_TOPIC", next_concept))
-        triples.append((next_concept, "PREREQUISITE", previous_concept))
-        edges.append(
-            {"subject": previous_concept, "relation": "NEXT_TOPIC", "object": next_concept}
-        )
-        edges.append(
-            {"subject": next_concept, "relation": "PREREQUISITE", "object": previous_concept}
-        )
+    triples = [
+        (edge["subject"], edge["relation"], edge["object"])
+        for edge in edges
+    ]
 
     nodes = [
         {"name": node, "important": graph.nodes[node].get("important", False)}

@@ -12,6 +12,7 @@ Return JSON only. No markdown.
 Never include random nouns, adjectives, filler words, sentence fragments, or generic words.
 Only include meaningful educational concepts.
 Explanations must be simple, concrete, and useful for a beginner.
+Avoid textbook language. Explain like an excellent teacher.
 """
 
 
@@ -184,6 +185,9 @@ def fallback_roadmap(topic):
             "example": "Like learning one tool before using it in a bigger project.",
             "explanation": f"Definition: {clean_topic} is an important concept for solving specific problems.\nWhy It Matters: It supports related topics.\nReal World Example: Like learning one tool before using it in a bigger project.",
             "analogy": "Like learning one tool before using it in a bigger project.",
+            "common_mistakes": "Skipping practice examples or learning related topics without understanding the main idea.",
+            "interview_questions": f"What problem does {clean_topic} solve? When would you use it?",
+            "when_to_study_next": "Move on after you can explain the idea and solve one simple example without help.",
             "difficulty": "Beginner",
             "estimated_time": "2-4 hours",
             "prerequisites": [],
@@ -210,6 +214,9 @@ def validate_roadmap(data, requested_topic):
         "example": data.get("example") or fallback_roadmap(topic).get("example"),
         "explanation": "",
         "analogy": data.get("analogy") or "Think of it as one step in a larger learning path.",
+        "common_mistakes": data.get("common_mistakes") or fallback_roadmap(topic).get("common_mistakes"),
+        "interview_questions": data.get("interview_questions") or fallback_roadmap(topic).get("interview_questions"),
+        "when_to_study_next": data.get("when_to_study_next") or fallback_roadmap(topic).get("when_to_study_next"),
         "difficulty": data.get("difficulty") or "Beginner",
         "estimated_time": data.get("estimated_time") or "2-4 hours",
         "prerequisites": [],
@@ -277,8 +284,11 @@ Return JSON only:
   "definition": "simple definition in plain English",
   "why_it_matters": "why this topic matters",
   "example": "real world example",
-  "explanation": "Definition: ...\\nWhy It Matters: ...\\nReal World Example: ...",
   "analogy": "simple analogy",
+  "common_mistakes": "common learner mistakes",
+  "interview_questions": "2-3 interview questions",
+  "when_to_study_next": "when the learner is ready for the next topic",
+  "explanation": "Simple Definition: ...\\nWhy it matters: ...\\nReal-life analogy: ...\\nExample: ...\\nCommon mistakes: ...\\nInterview questions: ...\\nWhen to study next topic: ...",
   "difficulty": "Beginner | Intermediate | Advanced",
   "estimated_time": "study time",
   "prerequisites": [
@@ -297,8 +307,10 @@ Rules:
 - Return ONLY real study concepts.
 - Do not include random words, generic nouns, sentence fragments, adjectives, or verbs.
 - Reject words like Elements, Initial, Specified, Grow, Creates, Size.
-- Explanation must have exactly 3 short sections: Definition, Why It Matters, Real World Example.
-- Use simple English. Avoid jargon where possible.
+- Explanation must have exactly 7 short sections: Simple Definition, Why it matters, Real-life analogy, Example, Common mistakes, Interview questions, When to study next topic.
+- Keep the full explanation under 300 words.
+- Avoid textbook language. Explain like an excellent teacher.
+- Use simple English, short sentences, and concrete examples.
 - Recommend only true prerequisites, meaningful next topics, and useful related topics.
 - Every recommendation must include a clear reason.
 """
@@ -320,15 +332,34 @@ Rules:
 def format_explanation(data):
     definition = (data.get("definition") or "").strip()
     why = (data.get("why_it_matters") or "").strip()
-    example = (data.get("example") or data.get("analogy") or "").strip()
+    analogy = (data.get("analogy") or "Think of it as a tool you learn before using it in a bigger project.").strip()
+    example = (data.get("example") or analogy).strip()
+    mistakes = (
+        data.get("common_mistakes")
+        or "A common mistake is memorizing the words without trying a small example."
+    ).strip()
+    questions = (
+        data.get("interview_questions")
+        or f"What problem does {data.get('topic', 'this topic')} solve? When would you use it?"
+    ).strip()
+    next_step = (
+        data.get("when_to_study_next")
+        or "Study the next topic when you can explain this one simply and solve a basic example."
+    ).strip()
 
-    return "\n".join(
+    explanation = "\n".join(
         [
-            f"Definition: {definition}",
-            f"Why It Matters: {why}",
-            f"Real World Example: {example}",
+            f"Simple Definition: {definition}",
+            f"Why it matters: {why}",
+            f"Real-life analogy: {analogy}",
+            f"Example: {example}",
+            f"Common mistakes: {mistakes}",
+            f"Interview questions: {questions}",
+            f"When to study next topic: {next_step}",
         ]
     )
+    words = explanation.split()
+    return " ".join(words[:300]) if len(words) > 300 else explanation
 
 
 def get_or_create_roadmap(topic, context_text=None, force_refresh=False):

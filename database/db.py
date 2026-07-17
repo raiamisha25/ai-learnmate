@@ -24,7 +24,7 @@ STATUS_RANK = {
 WEAK_SCORE_THRESHOLD = 50
 STRONG_SCORE_THRESHOLD = 80
 REPEATED_WEAK_ATTEMPTS = 2
-ADAPTIVE_RECOMMENDATION_LIMIT = 6
+ADAPTIVE_RECOMMENDATION_LIMIT = 5
 
 
 def get_connection():
@@ -336,7 +336,17 @@ def progress_is_mastered(item):
     return normalize_progress_status(item["status"], item["last_score"]) == PROGRESS_MASTERED
 
 
-def roadmap_item(topic, source=None, reason=None, score=None, trend="Stable", status="Ready To Learn"):
+def roadmap_item(
+    topic,
+    source=None,
+    reason=None,
+    score=None,
+    trend="Stable",
+    status="Ready To Learn",
+    estimated_time="45m",
+    difficulty="Beginner",
+    prerequisites_completed=None,
+):
     return {
         "topic": topic,
         "source": source,
@@ -344,6 +354,10 @@ def roadmap_item(topic, source=None, reason=None, score=None, trend="Stable", st
         "score": score,
         "trend": trend or "Stable",
         "status": status,
+        "why": reason or "Prerequisites are clear for this topic.",
+        "estimated_time": estimated_time,
+        "difficulty": difficulty,
+        "prerequisites_completed": prerequisites_completed or [],
     }
 
 
@@ -623,6 +637,61 @@ def user_goals(user_id, normalized_progress=None, topic_scores=None, limit=None)
     return goals
 
 
+IMPORTANT_TOPIC_KEYWORDS = (
+    "algorithm", "array", "binary tree", "database", "decision tree", "dynamic programming",
+    "graph", "hash", "heap", "machine learning", "neural network", "operating system",
+    "queue", "random forest", "recursion", "regression", "search", "sorting", "stack",
+    "statistics", "tree",
+)
+
+
+def recommendation_difficulty(topic_name, completed_count, prerequisite_count):
+    lowered = topic_name.lower()
+
+    if prerequisite_count >= 3 or any(word in lowered for word in ("advanced", "neural", "random forest")):
+        return "Advanced"
+    if completed_count >= 1 or any(word in lowered for word in ("tree", "graph", "database", "regression")):
+        return "Intermediate"
+    return "Beginner"
+
+
+def recommendation_estimated_time(difficulty, weak=False):
+    minutes = {"Beginner": 45, "Intermediate": 75, "Advanced": 110}.get(difficulty, 60)
+    if weak:
+        minutes += 20
+
+    hours, remainder = divmod(minutes, 60)
+    if hours and remainder:
+        return f"{hours}h {remainder}m"
+    if hours:
+        return f"{hours}h"
+    return f"{remainder}m"
+
+
+def topic_importance_score(topic_name):
+    lowered = topic_name.lower()
+    return 25 if any(keyword in lowered for keyword in IMPORTANT_TOPIC_KEYWORDS) else 10
+
+
+def recommendation_reason(topic, completed_prerequisites, missing_prerequisites, score, is_weak, source):
+    reasons = []
+
+    if completed_prerequisites:
+        reasons.append(f"{len(completed_prerequisites)} prerequisite(s) completed")
+    if missing_prerequisites:
+        reasons.append(f"{len(missing_prerequisites)} prerequisite(s) still pending")
+    if is_weak:
+        reasons.append("recent quiz performance shows this needs revision")
+    elif score:
+        reasons.append(f"quiz average is {round(float(score['average_score']), 1)}%")
+    if source:
+        reasons.append(f"unlocked from {source}")
+    if topic_importance_score(topic) > 10:
+        reasons.append("high-value topic for the roadmap")
+
+    return "; ".join(reasons) or "Recommended from your learning progress."
+
+
 def adaptive_roadmap_data(saved_topics, normalized_progress, topic_scores):
     """Build personalized roadmap lanes from progress, weak topics, and prerequisites."""
     saved_by_key = {topic_key(item["topic"]): item for item in saved_topics}
@@ -653,80 +722,121 @@ def adaptive_roadmap_data(saved_topics, normalized_progress, topic_scores):
             if topic_key(prereq) not in mastered_keys
         ]
 
+    history_order = {
+        topic_key(item["topic"]): index
+        for index, item in enumerate(saved_topics)
+        if item["topic"]
+    }
+
     def is_ready(topic_name):
         key = topic_key(topic_name)
         return key not in mastered_keys and key not in weak_keys and not missing_prerequisites(topic_name)
 
-    def add_unique(items, seen, item):
-        key = topic_key(item["topic"])
-        if key and key not in seen:
-            items.append(item)
-            seen.add(key)
+    def completed_prerequisites(topic_name):
+        return [
+            prereq
+            for prereq in prerequisites_for(topic_name)
+            if topic_key(prereq) in mastered_keys
+        ]
 
-    ready_to_learn = []
-    recommended_next = []
-    seen_ready = set()
-    seen_next = set()
+    def candidate_score(topic_name, source=None):
+        key = topic_key(topic_name)
+        progress = progress_by_key.get(key)
+        score = score_by_key.get(key)
+        prerequisites = prerequisites_for(topic_name)
+        completed = completed_prerequisites(topic_name)
+        missing = missing_prerequisites(topic_name)
+        is_weak = key in weak_keys
+        difficulty = recommendation_difficulty(topic_name, len(completed), len(prerequisites))
+        difficulty_score = {"Beginner": 18, "Intermediate": 12, "Advanced": 6}.get(difficulty, 10)
+        quiz_score = 0
+
+        if score:
+            average = float(score["average_score"])
+            if average < WEAK_SCORE_THRESHOLD:
+                quiz_score += 20
+            elif average < STRONG_SCORE_THRESHOLD:
+                quiz_score += 12
+            else:
+                quiz_score -= 20
+
+        return (
+            (len(completed) * 30)
+            - (len(missing) * 25)
+            + topic_importance_score(topic_name)
+            + difficulty_score
+            + max(0, 10 - history_order.get(key, 10))
+            + quiz_score
+            + (25 if is_weak else 0)
+            - (100 if key in mastered_keys else 0)
+            + (8 if progress and normalize_progress_status(progress["status"], progress["last_score"]) == PROGRESS_LEARNING else 0)
+            + (6 if source and topic_key(source) in mastered_keys else 0)
+        )
+
+    def ranked_item(topic_name, source=None, status="Recommended Next"):
+        key = topic_key(topic_name)
+        score = score_by_key.get(key)
+        completed = completed_prerequisites(topic_name)
+        missing = missing_prerequisites(topic_name)
+        is_weak = key in weak_keys
+        difficulty = recommendation_difficulty(topic_name, len(completed), len(prerequisites_for(topic_name)))
+        return roadmap_item(
+            topic_name,
+            source=source,
+            score=float(score["average_score"]) if score else None,
+            trend=score["trend"] if score else "Stable",
+            reason=recommendation_reason(topic_name, completed, missing, score, is_weak, source),
+            status=status,
+            estimated_time=recommendation_estimated_time(difficulty, weak=is_weak),
+            difficulty=difficulty,
+            prerequisites_completed=completed,
+        )
+
+    ready_candidates = {}
+    recommendation_candidates = {}
 
     for topic in saved_topics:
         topic_name = topic["topic"]
         key = topic_key(topic_name)
-        progress = progress_by_key.get(key)
-        score = score_by_key.get(key)
 
         if is_ready(topic_name):
-            add_unique(
-                ready_to_learn,
-                seen_ready,
-                roadmap_item(
-                    topic_name,
-                    score=float(progress.get("last_score") or 0) if progress else None,
-                    trend=score["trend"] if score else "Stable",
-                    reason="All saved prerequisites are mastered.",
-                ),
-            )
+            ready_candidates[key] = (candidate_score(topic_name), ranked_item(topic_name, status="Ready To Learn"))
+        elif key in weak_keys and key not in mastered_keys:
+            ready_candidates[key] = (candidate_score(topic_name), ranked_item(topic_name, status="Needs Revision"))
 
     for topic in saved_topics:
         source_topic = topic["topic"]
-        if topic_key(source_topic) not in mastered_keys:
-            continue
 
         for next_topic in split_topic_lines(topic["after_topics"]):
-            missing = missing_prerequisites(next_topic)
-            if not is_ready(next_topic):
+            key = topic_key(next_topic)
+            if key in mastered_keys:
                 continue
 
-            if missing:
-                continue
+            item = ranked_item(next_topic, source=source_topic)
+            score_value = candidate_score(next_topic, source=source_topic)
+            previous = recommendation_candidates.get(key)
 
-            add_unique(
-                recommended_next,
-                seen_next,
-                roadmap_item(
-                    next_topic,
-                    source=source_topic,
-                    reason=f"Unlocked after mastering {source_topic}.",
-                    status="Recommended Next",
-                ),
-            )
+            if not previous or score_value > previous[0]:
+                recommendation_candidates[key] = (score_value, item)
 
-    if len(recommended_next) < ADAPTIVE_RECOMMENDATION_LIMIT:
-        for item in ready_to_learn:
-            add_unique(
-                recommended_next,
-                seen_next,
-                {
-                    **item,
-                    "status": "Recommended Next",
-                    "reason": item["reason"],
-                },
-            )
-            if len(recommended_next) >= ADAPTIVE_RECOMMENDATION_LIMIT:
-                break
+    for key, (score_value, item) in ready_candidates.items():
+        previous = recommendation_candidates.get(key)
+        recommended_item = {**item, "status": "Recommended Next"}
+        if not previous or score_value > previous[0]:
+            recommendation_candidates[key] = (score_value, recommended_item)
+
+    ready_to_learn = [
+        item
+        for _score, item in sorted(ready_candidates.values(), key=lambda pair: pair[0], reverse=True)
+    ][:ADAPTIVE_RECOMMENDATION_LIMIT]
+    recommended_next = [
+        item
+        for _score, item in sorted(recommendation_candidates.values(), key=lambda pair: pair[0], reverse=True)
+    ][:ADAPTIVE_RECOMMENDATION_LIMIT]
 
     return {
-        "ready_to_learn": ready_to_learn[:ADAPTIVE_RECOMMENDATION_LIMIT],
-        "recommended_next": recommended_next[:ADAPTIVE_RECOMMENDATION_LIMIT],
+        "ready_to_learn": ready_to_learn,
+        "recommended_next": recommended_next,
     }
 
 

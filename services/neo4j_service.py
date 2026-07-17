@@ -1,4 +1,5 @@
 import os
+import re
 
 from dotenv import load_dotenv
 from neo4j import GraphDatabase
@@ -45,51 +46,87 @@ def clean_topic_list(topics):
     return sorted({normalize_topic_name(topic) for topic in topics if topic and is_valid_topic(topic)})
 
 
+def clean_concept_name_for_storage(name):
+    name = re.sub(r"[^\w\s+#.-]", " ", str(name or ""))
+    name = re.sub(r"[.]+", " ", name)
+    name = " ".join(name.split())
+    return normalize_topic_name(name)
+
+
 def relation_to_type(relation):
-    relation_types = {
-        "explains": "EXPLAINS",
-        "EXPLAINS": "EXPLAINS",
-        "is related to": "RELATED_TO",
-        "RELATED_TO": "RELATED_TO",
-        "next topic": "NEXT_TOPIC",
-        "NEXT_TOPIC": "NEXT_TOPIC",
-        "prerequisite": "PREREQUISITE",
-        "PREREQUISITE": "PREREQUISITE",
+    allowed_types = {
+        "PREREQUISITE",
+        "NEXT_TOPIC",
+        "PART_OF",
+        "USES",
+        "APPLICATION_OF",
+        "COMPARES_WITH",
+        "RELATED_TO",
     }
 
-    return relation_types.get(relation, "RELATED_TO")
+    relation_type = str(relation or "").strip().upper()
+    return relation_type if relation_type in allowed_types else "RELATED_TO"
 
 
 def save_graph_to_neo4j(graph_data):
-    valid_names = set(validate_concepts([node.get("name") for node in graph_data.get("nodes", [])], limit=25))
+    node_properties = {}
 
-    graph_data = {
-        "nodes": [
-            {"name": node["name"], "important": node.get("important", False)}
-            for node in graph_data.get("nodes", [])
-            if node.get("name") in valid_names
-        ],
-        "edges": [
-            edge for edge in graph_data.get("edges", [])
-            if edge.get("subject") in valid_names and edge.get("object") in valid_names
-        ],
-        "triples": [
-            triple for triple in graph_data.get("triples", [])
-            if len(triple) == 3 and triple[0] in valid_names and triple[2] in valid_names
-        ],
-    }
+    for node in graph_data.get("nodes", []):
+        clean_name = clean_concept_name_for_storage(node.get("name"))
+        if is_valid_topic(clean_name):
+            node_properties[clean_name] = {
+                "name": clean_name,
+                "important": bool(node.get("important", False)),
+            }
 
-    if not graph_data["nodes"]:
+    edges = []
+    seen_edges = set()
+
+    for edge in graph_data.get("edges", []):
+        subject = clean_concept_name_for_storage(edge.get("subject"))
+        object_name = clean_concept_name_for_storage(edge.get("object"))
+        relation_type = relation_to_type(edge.get("relation"))
+
+        if subject == object_name:
+            continue
+        if not is_valid_topic(subject) or not is_valid_topic(object_name):
+            continue
+
+        edge_key = (subject, relation_type, object_name)
+        if edge_key in seen_edges:
+            continue
+
+        seen_edges.add(edge_key)
+        edges.append(
+            {"subject": subject, "relation": relation_type, "object": object_name}
+        )
+        node_properties.setdefault(
+            subject,
+            {"name": subject, "important": False},
+        )
+        node_properties.setdefault(
+            object_name,
+            {"name": object_name, "important": False},
+        )
+
+    connected_names = {edge["subject"] for edge in edges} | {edge["object"] for edge in edges}
+    nodes = [
+        node
+        for name, node in node_properties.items()
+        if name in connected_names
+    ]
+
+    if not edges or not nodes:
         return
 
-    concept_names = [node["name"] for node in graph_data["nodes"]]
+    concept_names = [node["name"] for node in nodes]
 
     try:
         with get_neo4j_driver() as driver:
             with driver.session() as session:
                 session.run(
                     """
-                    MATCH (start:Concept)-[rel:PREREQUISITE|NEXT_TOPIC|EXPLAINS|RELATED_TO]->(end:Concept)
+                    MATCH (start:Concept)-[rel:PREREQUISITE|NEXT_TOPIC|PART_OF|USES|APPLICATION_OF|COMPARES_WITH|RELATED_TO]->(end:Concept)
                     WHERE start.name IN $concept_names OR end.name IN $concept_names
                     DELETE rel
                     """,
@@ -103,7 +140,7 @@ def save_graph_to_neo4j(graph_data):
                     """
                 )
 
-                for node in graph_data["nodes"]:
+                for node in nodes:
                     session.run(
                         """
                         MERGE (concept:Concept {name: $name})
@@ -113,8 +150,8 @@ def save_graph_to_neo4j(graph_data):
                         important=node["important"],
                     )
 
-                for edge in graph_data["edges"]:
-                    relation_type = relation_to_type(edge["relation"])
+                for edge in edges:
+                    relation_type = edge["relation"]
                     cypher = f"""
                     MATCH (subject:Concept {{name: $subject}})
                     MATCH (object:Concept {{name: $object}})
@@ -127,6 +164,14 @@ def save_graph_to_neo4j(graph_data):
                         object=edge["object"],
                         relation_type=relation_type,
                     )
+
+                session.run(
+                    """
+                    MATCH (concept:Concept)
+                    WHERE NOT (concept)--()
+                    DELETE concept
+                    """
+                )
 
         neo4j_status.update({"connected": True, "message": "Learning path saved."})
     except Exception as exc:
@@ -286,12 +331,12 @@ def fetch_suggestions_for_topic(topic):
 
 
 def save_topic_suggestions(topic, before, after):
-    clean_topic = normalize_topic_name(topic)
+    clean_topic = clean_concept_name_for_storage(topic)
     if not is_valid_topic(clean_topic):
         return
 
-    before = validate_concepts(before, limit=5)
-    after = validate_concepts(after, limit=5)
+    before = validate_concepts([clean_concept_name_for_storage(item) for item in before], limit=5)
+    after = validate_concepts([clean_concept_name_for_storage(item) for item in after], limit=5)
 
     try:
         with get_neo4j_driver() as driver:
@@ -390,18 +435,26 @@ def fetch_roadmap_from_neo4j(topic):
 
 
 def save_roadmap_to_neo4j(roadmap):
-    topic = normalize_topic_name(roadmap.get("topic"))
+    topic = clean_concept_name_for_storage(roadmap.get("topic"))
     if not is_valid_topic(topic):
         return
 
     for key in ("prerequisites", "next_topics", "related_topics"):
-        valid_topics = set(validate_concepts([item.get("topic") for item in roadmap.get(key, [])], limit=5))
+        valid_topics = set(
+            validate_concepts(
+                [clean_concept_name_for_storage(item.get("topic")) for item in roadmap.get(key, [])],
+                limit=5,
+            )
+        )
         roadmap[key] = [
-            {**item, "topic": normalize_topic_name(item.get("topic"))}
+            {**item, "topic": clean_concept_name_for_storage(item.get("topic"))}
             for item in roadmap.get(key, [])
-            if normalize_topic_name(item.get("topic")) in valid_topics
+            if clean_concept_name_for_storage(item.get("topic")) in valid_topics
         ]
     roadmap["topic"] = topic
+
+    if not any(roadmap.get(key) for key in ("prerequisites", "next_topics", "related_topics")):
+        return
 
     try:
         with get_neo4j_driver() as driver:
