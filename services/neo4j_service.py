@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 from neo4j import GraphDatabase
 
 from models.state import knowledge_graph, neo4j_status
-from utils.topic_validator import is_valid_topic, normalize_topic_name
+from utils.topic_validator import is_valid_topic, normalize_topic_name, validate_concepts
 
 
 load_dotenv()
@@ -61,6 +61,24 @@ def relation_to_type(relation):
 
 
 def save_graph_to_neo4j(graph_data):
+    valid_names = set(validate_concepts([node.get("name") for node in graph_data.get("nodes", [])], limit=25))
+
+    graph_data = {
+        "nodes": [
+            {"name": node["name"], "important": node.get("important", False)}
+            for node in graph_data.get("nodes", [])
+            if node.get("name") in valid_names
+        ],
+        "edges": [
+            edge for edge in graph_data.get("edges", [])
+            if edge.get("subject") in valid_names and edge.get("object") in valid_names
+        ],
+        "triples": [
+            triple for triple in graph_data.get("triples", [])
+            if len(triple) == 3 and triple[0] in valid_names and triple[2] in valid_names
+        ],
+    }
+
     if not graph_data["nodes"]:
         return
 
@@ -268,6 +286,13 @@ def fetch_suggestions_for_topic(topic):
 
 
 def save_topic_suggestions(topic, before, after):
+    clean_topic = normalize_topic_name(topic)
+    if not is_valid_topic(clean_topic):
+        return
+
+    before = validate_concepts(before, limit=5)
+    after = validate_concepts(after, limit=5)
+
     try:
         with get_neo4j_driver() as driver:
             with driver.session() as session:
@@ -281,7 +306,7 @@ def save_topic_suggestions(topic, before, after):
                         MERGE (before)-[:RELATED_TO]->(topic)
                         """,
                         before_topic=before_topic,
-                        topic=topic,
+                        topic=clean_topic,
                     )
 
                 for after_topic in after:
@@ -293,7 +318,7 @@ def save_topic_suggestions(topic, before, after):
                         MERGE (after)-[:PREREQUISITE]->(topic)
                         MERGE (topic)-[:RELATED_TO]->(after)
                         """,
-                        topic=topic,
+                        topic=clean_topic,
                         after_topic=after_topic,
                     )
     except Exception as exc:
@@ -365,6 +390,19 @@ def fetch_roadmap_from_neo4j(topic):
 
 
 def save_roadmap_to_neo4j(roadmap):
+    topic = normalize_topic_name(roadmap.get("topic"))
+    if not is_valid_topic(topic):
+        return
+
+    for key in ("prerequisites", "next_topics", "related_topics"):
+        valid_topics = set(validate_concepts([item.get("topic") for item in roadmap.get(key, [])], limit=5))
+        roadmap[key] = [
+            {**item, "topic": normalize_topic_name(item.get("topic"))}
+            for item in roadmap.get(key, [])
+            if normalize_topic_name(item.get("topic")) in valid_topics
+        ]
+    roadmap["topic"] = topic
+
     try:
         with get_neo4j_driver() as driver:
             with driver.session() as session:

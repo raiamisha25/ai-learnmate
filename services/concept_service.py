@@ -1,6 +1,10 @@
+import json
 import re
 
 import networkx as nx
+
+from services.groq_service import safe_groq_generate
+from utils.topic_validator import validate_concepts
 
 
 STOP_WORDS = {
@@ -11,6 +15,20 @@ STOP_WORDS = {
     "using", "when", "where", "which", "while", "with", "would",
     "and", "are", "can", "for", "has", "the", "was", "will",
 }
+
+
+CONCEPT_EXTRACTION_SYSTEM_PROMPT = """
+You extract learning concepts from study material.
+Return ONLY valid JSON. Do not include markdown, prose, or comments.
+Only include domain-specific educational concepts, not random English words.
+"""
+
+
+def clean_json_object(text):
+    text = (text or "").strip()
+    start = text.find("{")
+    end = text.rfind("}")
+    return text[start : end + 1] if start != -1 and end != -1 and end > start else ""
 
 
 def clean_concept_name(text):
@@ -35,7 +53,56 @@ def add_phrases_from_chunk(chunk, phrase_counts):
                 phrase_counts[phrase] = phrase_counts.get(phrase, 0) + 1
 
 
-def extract_key_concepts(summary):
+def extract_concepts_with_ai(text):
+    user_prompt = f"""
+Extract the important learning concepts from this study material.
+
+Return ONLY JSON in this exact shape:
+{{
+  "concepts": [
+    {{
+      "name": "ArrayList",
+      "definition": "short definition",
+      "importance": "why it matters",
+      "prerequisites": ["related prerequisite concept"],
+      "next_topics": ["meaningful next concept"]
+    }}
+  ]
+}}
+
+Rules:
+- Include only domain-specific concepts, such as ArrayList, Linked List, Binary Tree, Heap, Graph, DFS, Gradient Descent, Random Forest, Cell, Mitochondria, or DNA.
+- Do not include common English words, pronouns, UI words, verbs, adjectives, or sentence fragments.
+- Reject words like Learn, Your, Environment, Initial, Important, Example, Simple, Next, Topic, Step, Continue, Before, After, This, That, Understanding, Elements, and Size.
+- If there are no clear domain concepts, return {{"concepts":[]}}.
+
+Study material:
+{(text or "")[:7000]}
+"""
+    response_text, error = safe_groq_generate(
+        CONCEPT_EXTRACTION_SYSTEM_PROMPT,
+        user_prompt,
+        max_tokens=1200,
+    )
+
+    if error:
+        print(f"AI concept extraction failed: {error}")
+        return []
+
+    try:
+        data = json.loads(clean_json_object(response_text))
+    except (json.JSONDecodeError, TypeError) as exc:
+        print(f"AI concept extraction returned invalid JSON: {exc}")
+        return []
+
+    concepts = data.get("concepts", []) if isinstance(data, dict) else []
+    if not isinstance(concepts, list):
+        return []
+
+    return validate_concepts(concepts, limit=10)
+
+
+def extract_fallback_concepts(summary):
     """Extract multi-word study topics such as Linked List or Binary Tree."""
     phrase_counts = {}
     sentences = re.split(r"[.!?;:\n]+", (summary or "").lower())
@@ -72,11 +139,16 @@ def extract_key_concepts(summary):
         if len(concepts) == 10:
             break
 
-    return concepts
+    return validate_concepts(concepts, limit=10)
+
+
+def extract_key_concepts(summary):
+    concepts = extract_concepts_with_ai(summary)
+    return concepts or extract_fallback_concepts(summary)
 
 
 def build_knowledge_graph(summary):
-    concepts = extract_key_concepts(summary)
+    concepts = validate_concepts(extract_key_concepts(summary), limit=10)
     graph = nx.MultiDiGraph()
     edges = []
     triples = []
