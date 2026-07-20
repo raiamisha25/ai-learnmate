@@ -197,7 +197,7 @@ def fallback_roadmap(topic):
     )
 
 
-def validate_roadmap(data, requested_topic):
+def validate_roadmap(data, requested_topic, is_from_pdf=False):
     topic = normalize_topic_name(data.get("topic") or requested_topic)
     if not is_valid_topic(topic):
         topic = normalize_topic_name(requested_topic)
@@ -242,10 +242,11 @@ def validate_roadmap(data, requested_topic):
                 }
             )
 
-    curated = fallback_roadmap(cleaned["topic"])
-    if curated.get("topic") == cleaned["topic"]:
-        for key in ("prerequisites", "next_topics", "related_topics"):
-            add_curated_items(cleaned, curated, key)
+    if not is_from_pdf:
+        curated = fallback_roadmap(cleaned["topic"])
+        if curated.get("topic") == cleaned["topic"]:
+            for key in ("prerequisites", "next_topics", "related_topics"):
+                add_curated_items(cleaned, curated, key)
 
     return cleaned
 
@@ -272,7 +273,55 @@ def add_curated_items(cleaned, curated, key):
 
 
 def generate_roadmap_with_ai(topic, context_text=None):
-    user_prompt = f"""
+    if context_text:
+        system_prompt = """
+You are an expert educational AI. Your task is to analyze study material (PDF text) to detect main concepts and build prerequisite relationships between them.
+Return ONLY valid JSON. Do not include markdown, prose, or comments.
+"""
+        user_prompt = f"""
+Analyze the following study material to extract main learning concepts and organize them into a roadmap.
+
+Study Material:
+{context_text[:7000]}
+
+Follow these instructions strictly:
+1. Detect the main concepts covered in this study material.
+2. Do not summarize every sentence. Instead, extract only distinct, meaningful learning concepts.
+3. Remove duplicate concepts (ensure all concept names are unique and distinct).
+4. Build prerequisite relationships between these concepts:
+   - Identify which concepts must be studied BEFORE other concepts.
+   - Map these relationships by listing them as prerequisites (concepts needed before learning the topic) or next_topics (concepts to learn after mastering the current topic).
+5. Ignore any headers, page numbers, footers, captions, or references.
+6. Store only meaningful learning concepts (real educational topics, domain-specific terminology). Do not include generic verbs, adjectives, pronouns, or common words.
+7. Set the overall main concept of the document as the main "topic".
+
+Return ONLY JSON in this exact shape:
+{{
+  "topic": "Main Concept Name",
+  "definition": "Simple definition of the main concept in plain English",
+  "why_it_matters": "Why this main concept matters",
+  "example": "Real-world example of the main concept",
+  "analogy": "Simple analogy of the main concept",
+  "common_mistakes": "Common learner mistakes for the main concept",
+  "interview_questions": "2-3 interview questions about the main concept",
+  "when_to_study_next": "When the learner is ready to study next concepts",
+  "explanation": "Simple Definition: ...\\nWhy it matters: ...\\nReal-life analogy: ...\\nExample: ...\\nCommon mistakes: ...\\nInterview questions: ...\\nWhen to study next topic: ...",
+  "difficulty": "Beginner | Intermediate | Advanced",
+  "estimated_time": "study time (e.g. 2-4 hours)",
+  "prerequisites": [
+    {{"topic": "Prerequisite Concept Name", "why": "Why this is a prerequisite of the main concept"}}
+  ],
+  "next_topics": [
+    {{"topic": "Next Concept Name", "why": "Why this should be learned after the main concept"}}
+  ],
+  "related_topics": [
+    {{"topic": "Related Concept Name", "why": "How this connects to the main concept"}}
+  ]
+}}
+"""
+        response_text, error = safe_groq_generate(system_prompt, user_prompt)
+    else:
+        user_prompt = f"""
 Create a learning roadmap for: {topic}
 
 Context:
@@ -314,7 +363,7 @@ Rules:
 - Recommend only true prerequisites, meaningful next topics, and useful related topics.
 - Every recommendation must include a clear reason.
 """
-    response_text, error = safe_groq_generate(ROADMAP_SYSTEM_PROMPT, user_prompt)
+        response_text, error = safe_groq_generate(ROADMAP_SYSTEM_PROMPT, user_prompt)
 
     if error:
         print(f"Roadmap generation failed for '{topic}': {error}")
@@ -326,7 +375,7 @@ Rules:
         print(f"Roadmap generation failed for '{topic}': invalid JSON from Groq: {exc}")
         return fallback_roadmap(topic)
 
-    return validate_roadmap(data, topic)
+    return validate_roadmap(data, topic, is_from_pdf=bool(context_text))
 
 
 def format_explanation(data):
@@ -365,7 +414,8 @@ def format_explanation(data):
 def get_or_create_roadmap(topic, context_text=None, force_refresh=False):
     clean_topic = normalize_topic_name(topic)
 
-    if not force_refresh:
+    # Always generate a new roadmap when context_text is provided (e.g., from PDF upload)
+    if not force_refresh and not context_text:
         cached = fetch_roadmap_from_neo4j(clean_topic)
         if cached:
             cached = validate_roadmap(cached, clean_topic)
@@ -376,3 +426,4 @@ def get_or_create_roadmap(topic, context_text=None, force_refresh=False):
     save_roadmap_to_neo4j(roadmap)
     roadmap["cached"] = False
     return roadmap
+
