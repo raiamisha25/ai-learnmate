@@ -4,7 +4,7 @@ study_service.py
 Responsible ONLY for orchestrating the learning workflow:
 - Coordinating roadmap generation
 - Lazy on-demand lecture generation & application-level caching
-- Coordinating recommendation engine and quiz service
+- Coordinating semantic recommendation categorization and quiz service
 """
 
 import json
@@ -14,12 +14,11 @@ from services.groq_service import safe_groq_generate
 from services.neo4j_service import fetch_raw_suggestions_from_neo4j
 from services.prompt_builders import build_topic_lecture_prompt
 from services.quiz_service import generate_quiz
-from services.recommendation_service import rank_recommendations
+from services.recommendation_service import categorize_and_rank_recommendations
 from services.roadmap_service import get_or_create_roadmap
 from utils.topic_validator import canonicalize_concept_name, logger
 
 
-# Application-level cache for expensive 300-700 word university professor lectures
 LECTURE_CACHE = {}
 
 
@@ -50,7 +49,7 @@ def get_or_create_topic_lecture(topic):
         return lecture_data
 
     try:
-        logger.info(f"[JSON PARSING] Parsing JSON for university professor lecture on '{clean_t}'...")
+        logger.info(f"[JSON PARSING] Parsing JSON for 14-section university professor lecture on '{clean_t}'...")
         lecture_data = json.loads(clean_json_text(response_text))
         logger.info(f"[JSON PARSING] Success parsing lecture JSON for '{clean_t}'.")
     except (json.JSONDecodeError, TypeError) as exc:
@@ -68,44 +67,45 @@ def get_or_create_topic_lecture(topic):
 
 def generate_fallback_lecture(topic):
     clean_t = canonicalize_concept_name(topic)
-    return {
+    fallback = {
         "topic": clean_t,
-        "definition": f"{clean_t} is a fundamental educational concept in this domain.",
-        "intuition": f"Think of {clean_t} as a building block that simplifies complex data operations.",
-        "motivation": f"Computer scientists and engineers master {clean_t} to design efficient software systems.",
+        "definition": f"{clean_t} is a fundamental educational concept in computer science and engineering.",
+        "why_it_matters": f"Understanding {clean_t} solves key resource management and data organization challenges.",
+        "intuition": f"Think of {clean_t} as a building block that simplifies complex operations.",
         "real_world_analogy": f"Using {clean_t} is like organizing tools in a labeled workshop drawer.",
-        "step_by_step_explanation": f"1. Initialize {clean_t}.\n2. Execute core operations.\n3. Manage memory and resources.",
-        "examples": f"Practical exercises demonstrating {clean_t} usage.",
-        "applications": f"Production applications in databases, operating systems, and web services.",
-        "advantages": "Fast lookups, modularity, and structured data handling.",
-        "limitations": "Requires initial configuration and memory overhead.",
-        "time_and_space_complexity": "Time Complexity: O(1) to O(N). Space Complexity: O(N).",
-        "common_mistakes": "Forgetting boundary checks or ignoring resource deallocation.",
-        "interview_questions": f"1. Explain how {clean_t} works.\n2. Compare {clean_t} with alternative data structures.",
-        "revision_summary": f"{clean_t} organizes data efficiently and forms a core computer science foundation.",
-        "learning_tips": "Implement a simple working example from scratch to build muscle memory.",
-        "explanation": f"Definition: {clean_t} is a fundamental educational concept in this domain.",
+        "step_by_step_explanation": f"1. Initialize {clean_t}.\n2. Perform core operations.\n3. Clean up resources.",
+        "visual_thinking": f"Imagine structured nodes or boxes connected in sequence representing {clean_t}.",
+        "simple_example": f"Walking through a basic scenario using {clean_t} step by step.",
+        "code_example": f"// Simple demonstration of {clean_t}\n// Line 1: Initialize\n// Line 2: Execute",
+        "advantages": "Fast execution, modularity, and structured data handling.",
+        "limitations": "Initial setup overhead and memory constraints.",
+        "common_mistakes": "Ignoring edge cases or boundary conditions.",
+        "interview_perspective": f"Explain the core mechanism of {clean_t} and its time complexity.",
+        "summary": f"{clean_t} forms a critical academic and practical foundation.",
+        "what_to_learn_next": f"Explore advanced variations and applications of {clean_t}.",
     }
+    fallback["explanation"] = format_rich_lecture_explanation(fallback)
+    return fallback
 
 
 def format_rich_lecture_explanation(data):
     sections = [
-        f"Simple Definition: {data.get('definition', '')}",
-        f"Intuition & Mental Model: {data.get('intuition', '')}",
-        f"Why It Matters: {data.get('motivation', '')}",
-        f"Real-World Analogy: {data.get('real_world_analogy', '')}",
-        f"Step-by-Step Working: {data.get('step_by_step_explanation', '')}",
-        f"Example Breakdown: {data.get('examples', '')}",
-        f"Industry Applications: {data.get('applications', '')}",
-        f"Key Advantages: {data.get('advantages', '')}",
-        f"Limitations & Drawbacks: {data.get('limitations', '')}",
-        f"Time & Space Complexity: {data.get('time_and_space_complexity', '')}",
-        f"Common Student Mistakes: {data.get('common_mistakes', '')}",
-        f"Interview Questions: {data.get('interview_questions', '')}",
-        f"Revision Summary: {data.get('revision_summary', '')}",
-        f"Learning Tips: {data.get('learning_tips', '')}",
+        f"### 1. Simple Definition\n{data.get('definition', '')}",
+        f"### 2. Why Do We Need It?\n{data.get('why_it_matters') or data.get('motivation', '')}",
+        f"### 3. Intuition & Mental Model\n{data.get('intuition', '')}",
+        f"### 4. Real-Life Analogy\n{data.get('real_world_analogy', '')}",
+        f"### 5. Step-by-Step Working\n{data.get('step_by_step_explanation', '')}",
+        f"### 6. Visual Thinking\n{data.get('visual_thinking', '')}",
+        f"### 7. Simple Example\n{data.get('simple_example') or data.get('examples', '')}",
+        f"### 8. Code Example\n{data.get('code_example', '')}",
+        f"### 9. Key Advantages\n{data.get('advantages', '')}",
+        f"### 10. Limitations & Drawbacks\n{data.get('limitations', '')}",
+        f"### 11. Common Beginner Mistakes\n{data.get('common_mistakes', '')}",
+        f"### 12. Interview Perspective\n{data.get('interview_perspective') or data.get('interview_questions', '')}",
+        f"### 13. Summary & Recap\n{data.get('summary') or data.get('revision_summary', '')}",
+        f"### 14. What To Learn Next\n{data.get('what_to_learn_next') or data.get('learning_tips', '')}",
     ]
-    return "\n\n".join(s for s in sections if len(s.split(": ", 1)[-1].strip()) > 0)
+    return "\n\n".join(s for s in sections if len(s.split("\n", 1)[-1].strip()) > 0)
 
 
 def infer_topic_from_text(text):
@@ -131,27 +131,42 @@ def process_input(topic=None, text=None):
     roadmap = get_or_create_roadmap(topic, context_text)
     lecture = get_or_create_topic_lecture(roadmap["topic"])
 
-    # Collect raw candidates from roadmap tiers
-    raw_before = [item for item in roadmap.get("prerequisites", [])]
-    raw_after = [item for item in roadmap.get("next_topics", [])]
-    raw_related = [item for item in roadmap.get("related_topics", [])]
+    # Collect raw candidates by source direction and relationship type
+    raw_candidates_by_source = {
+        "before": [],
+        "after": [],
+        "related": [],
+    }
 
-    # Include roadmap intermediate/advanced topics as potential successor candidates if needed
-    for item in roadmap.get("intermediate_topics", []) + roadmap.get("advanced_topics", []):
+    # Populate from roadmap tiers
+    for item in roadmap.get("prerequisites", []) + roadmap.get("foundation_topics", []) + roadmap.get("beginner_topics", []):
         if isinstance(item, dict) and item.get("topic"):
-            raw_after.append({"topic": item["topic"], "relation": "NEXT_TOPIC", "why": item.get("why", "")})
+            raw_candidates_by_source["before"].append({"topic": item["topic"], "relation": "PREREQUISITE_OF", "why": item.get("why", "")})
+
+    for item in roadmap.get("next_topics", []) + roadmap.get("intermediate_topics", []) + roadmap.get("advanced_topics", []):
+        if isinstance(item, dict) and item.get("topic"):
+            raw_candidates_by_source["after"].append({"topic": item["topic"], "relation": "BUILDS_ON", "why": item.get("why", "")})
+
+    for item in roadmap.get("related_topics", []) + roadmap.get("optional_reading", []):
+        if isinstance(item, dict) and item.get("topic"):
+            raw_candidates_by_source["related"].append({"topic": item["topic"], "relation": "RELATED_TO", "why": item.get("why", "")})
 
     # Retrieve graph relationships from Neo4j
     neo4j_records = fetch_raw_suggestions_from_neo4j(roadmap["topic"])
     if neo4j_records:
         g_item = neo4j_records[0]
-        raw_before.extend(g_item.get("before", []))
-        raw_after.extend(g_item.get("after", []))
+        raw_candidates_by_source["before"].extend(g_item.get("before", []))
+        raw_candidates_by_source["after"].extend(g_item.get("after", []))
 
-    # Rank recommendations via recommendation_service.py
-    ranked_before = rank_recommendations(raw_before, roadmap["topic"], limit=5)
-    ranked_after = rank_recommendations(raw_after, roadmap["topic"], limit=5)
-    ranked_related = rank_recommendations(raw_related, roadmap["topic"], limit=5)
+    # Categorize and rank recommendations into distinct sections with cross-section deduplication
+    categorized = categorize_and_rank_recommendations(
+        raw_candidates_by_source, roadmap["topic"], limit=5
+    )
+
+    ranked_before = categorized["before"]
+    ranked_after = categorized["after"]
+    ranked_related = categorized["related"]
+    ranked_applications = categorized["applications"]
 
     quiz_context = "\n".join(
         [
@@ -172,12 +187,13 @@ def process_input(topic=None, text=None):
         "analogy": lecture.get("real_world_analogy"),
         "definition": lecture.get("definition"),
         "why_it_matters": lecture.get("motivation") or lecture.get("why_it_matters"),
-        "example": lecture.get("examples"),
+        "example": lecture.get("examples") or lecture.get("simple_example"),
         "difficulty": roadmap.get("difficulty"),
         "estimated_time": roadmap.get("estimated_study_time"),
-        "before": ranked_before[:5],
-        "after": ranked_after[:5],
-        "related": ranked_related[:5],
+        "before": ranked_before,
+        "after": ranked_after,
+        "related": ranked_related,
+        "applications": ranked_applications,
         "quiz": quiz_data,
         "cached": roadmap.get("cached", False),
     }

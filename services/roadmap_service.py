@@ -47,7 +47,7 @@ CURATED_ROADMAPS = {
         "difficulty": "Intermediate",
         "estimated_study_time": "4-6 hours",
         "foundation_topics": [{"topic": "Recursion", "why": "Subtrees are processed recursively."}],
-        "beginner_topics": [{"topic": "Linked List", "why": "Nodes connect using reference pointers."}],
+        "beginner_topics": [{"topic": "Pointers", "why": "Nodes connect using reference pointers."}],
         "intermediate_topics": [{"topic": "Tree Traversal", "why": "Learn Inorder, Preorder, and Postorder traversals."}],
         "advanced_topics": [{"topic": "AVL Tree", "why": "Self-balancing binary search trees."}],
         "optional_reading": [{"topic": "Heap", "why": "Priority queue implementation using trees."}],
@@ -178,7 +178,7 @@ def fallback_roadmap(topic):
         "difficulty": "Beginner",
         "estimated_study_time": "3-5 hours",
         "foundation_topics": [{"topic": "Programming Fundamentals", "why": f"Core foundation for {clean_topic}."}],
-        "beginner_topics": [{"topic": f"Basic {clean_topic} Concepts", "why": "Introductory domain concepts."}],
+        "beginner_topics": [{"topic": f"Basic {clean_topic} Concept", "why": "Introductory domain concepts."}],
         "intermediate_topics": [{"topic": f"Intermediate {clean_topic} Implementation", "why": "Practical core implementation."}],
         "advanced_topics": [{"topic": f"Advanced {clean_topic} Applications", "why": "Complex applications."}],
         "optional_reading": [{"topic": f"{clean_topic} Optimization", "why": "Performance considerations."}],
@@ -256,20 +256,28 @@ def validate_roadmap(data, requested_topic, is_from_pdf=False, context_text=None
 
     foundation_clean = clean_topic_items(data.get("foundation_topics"), "PREREQUISITE_OF", "foundation topics")
     beginner_clean = clean_topic_items(data.get("beginner_topics"), "PREREQUISITE_OF", "beginner topics")
-    intermediate_clean = clean_topic_items(data.get("intermediate_topics"), "PREREQUISITE_OF", "intermediate topics")
-    advanced_clean = clean_topic_items(data.get("advanced_topics"), "PREREQUISITE_OF", "advanced topics")
+    intermediate_clean = clean_topic_items(data.get("intermediate_topics"), "BUILDS_ON", "intermediate topics")
+    advanced_clean = clean_topic_items(data.get("advanced_topics"), "BUILDS_ON", "advanced topics")
     prereqs_clean = clean_topic_items(data.get("prerequisites"), "PREREQUISITE_OF", "prerequisites")
     next_clean = clean_topic_items(data.get("next_topics"), "NEXT_TOPIC", "next topics")
     related_clean = clean_topic_items(data.get("related_topics"), "RELATED_TOPIC", "related topics")
 
-    # Merge all prerequisite tiers into main prerequisites list for Neo4j and callers
+    # Separate prerequisites from progression topics cleanly
     all_prereqs = []
     seen_prereqs = set()
-    for item in foundation_clean + beginner_clean + prereqs_clean + intermediate_clean + advanced_clean:
+    for item in foundation_clean + beginner_clean + prereqs_clean:
         t_low = item["topic"].lower()
         if t_low not in seen_prereqs and t_low != main_topic.lower():
             seen_prereqs.add(t_low)
             all_prereqs.append(item)
+
+    all_next = []
+    seen_next = set()
+    for item in intermediate_clean + advanced_clean + next_clean:
+        t_low = item["topic"].lower()
+        if t_low not in seen_next and t_low != main_topic.lower() and t_low not in seen_prereqs:
+            seen_next.add(t_low)
+            all_next.append(item)
 
     cleaned = {
         "topic": main_topic,
@@ -286,11 +294,11 @@ def validate_roadmap(data, requested_topic, is_from_pdf=False, context_text=None
         "optional_reading": data.get("optional_reading") or [],
         "learning_milestones": data.get("learning_milestones") or ["Master core concept"],
         "prerequisites": all_prereqs,
-        "next_topics": next_clean,
+        "next_topics": all_next,
         "related_topics": related_clean,
     }
 
-    logger.info(f"[VALIDATION] Finished roadmap validation for '{main_topic}'. Total prerequisites validated: {len(all_prereqs)}")
+    logger.info(f"[VALIDATION] Finished roadmap validation for '{main_topic}'. Total prerequisites: {len(all_prereqs)}, Next: {len(all_next)}")
     return cleaned
 
 

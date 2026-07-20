@@ -55,6 +55,8 @@ Use ONLY allowed relationship types representing true pedagogical dependency:
 - EXTENDS
 - SPECIAL_CASE_OF
 - ALTERNATIVE_TO
+- APPLICATION_OF
+- USED_IN
 """
     user_prompt = f"""
 Classify meaningful educational relationships between these concepts.
@@ -68,6 +70,8 @@ Allowed relationship labels:
 - EXTENDS (source adds functionality to destination)
 - SPECIAL_CASE_OF (source is a specific instance of destination)
 - ALTERNATIVE_TO (source is an alternative approach to destination)
+- APPLICATION_OF (destination is a real-world software/engineering application of source)
+- USED_IN (source is utilized within destination production environment)
 
 Return ONLY JSON in this exact shape:
 {{
@@ -216,35 +220,49 @@ Rules:
 
 def build_topic_lecture_prompt(topic):
     system_prompt = """
-You are an award-winning university professor teaching an in-depth lecture.
-Explain the requested topic thoroughly, clearly, and engagingly.
-Return ONLY valid JSON containing all 14 required educational sections. Target 300-700 words of rich content.
+You are an award-winning university professor teaching a first-year student.
+Assume the student is studying the topic for the first time.
+Be beginner-friendly, conversational, and educational rather than encyclopedic.
+Introduce ideas gradually from simple intuition to technical detail. Avoid defining concepts with unfamiliar terminology without explaining those terms first.
+Return ONLY valid JSON containing all 14 required educational sections (approx 600-1000 total words).
 """
     user_prompt = f"""
-Deliver a comprehensive university lecture for the topic: {topic}
+Deliver a comprehensive, beginner-friendly university lecture for the topic: {topic}
+
+Follow this exact 14-section structure in your JSON output:
+1. Simple Definition: 1-2 simple paragraphs in everyday language.
+2. Why Do We Need It?: What real-world problem this solves; motivate the learner.
+3. Intuition: Build a mental model using simple ideas.
+4. Real-Life Analogy: Relate to something familiar (e.g. Linked List -> Train coaches, Stack -> Plates, Queue -> Standing in line, Tree -> Family tree, Graph -> Cities and roads, Hash Table -> Dictionary).
+5. Step-by-Step Working: Detailed numbered explanation of how it works without skipping steps.
+6. Visual Thinking: Describe what the learner should picture (e.g. "Imagine five boxes connected by arrows...").
+7. Simple Example: Walk through one complete example slowly before code.
+8. Code Example: Clean code with line-by-line explanation.
+9. Advantages: Why programmers choose this concept.
+10. Limitations: When this concept is NOT a good choice.
+11. Common Beginner Mistakes: Frequent student misconceptions.
+12. Interview Perspective: Exam and technical interview questions with key answer points.
+13. Summary: Short recap.
+14. What To Learn Next: Educationally relevant successor topics.
 
 Return ONLY JSON in this exact shape:
 {{
   "topic": "{topic}",
-  "definition": "Rigorous academic yet clear definition",
-  "intuition": "Intuitive mental model and core idea",
-  "motivation": "Why this topic was developed and why computer scientists/engineers study it",
-  "real_world_analogy": "Vivid, memorable real-world analogy",
-  "step_by_step_explanation": "Detailed step-by-step breakdown of how it works under the hood",
-  "examples": "Concrete worked example with code logic or step breakdown",
-  "applications": "Real-world production applications and software industry use cases",
-  "advantages": "Key strengths and benefits",
-  "limitations": "Trade-offs, limitations, and edge-case drawbacks",
-  "time_and_space_complexity": "Time complexity (Best, Average, Worst) and space complexity analysis",
-  "common_mistakes": "Common student misconceptions and anti-patterns to avoid",
-  "interview_questions": "2-3 popular university exam or technical interview questions with key answer points",
-  "revision_summary": "Concise 3-sentence summary for rapid review",
-  "learning_tips": "Practical advice on practicing and mastering this topic"
+  "definition": "1-2 simple paragraphs explaining {topic} in everyday language.",
+  "why_it_matters": "Clear explanation of the real-world problem {topic} solves.",
+  "intuition": "Intuitive mental model building student understanding.",
+  "real_world_analogy": "Vivid, memorable real-life analogy.",
+  "step_by_step_explanation": "1. First step...\\n2. Second step...\\n3. Third step...",
+  "visual_thinking": "Visual description guiding student imagination.",
+  "simple_example": "Step-by-step conceptual walkthrough before code.",
+  "code_example": "Commented code block with line-by-line explanation.",
+  "advantages": "Key strengths and benefits.",
+  "limitations": "Trade-offs and drawbacks.",
+  "common_mistakes": "Frequent beginner mistakes to avoid.",
+  "interview_perspective": "Key exam/interview questions and answer points.",
+  "summary": "Short recap of key takeaways.",
+  "what_to_learn_next": "Suggested successor topics to study next."
 }}
-
-Rules:
-- Make every section thorough and educational. Do not return 1-sentence placeholders.
-- Target 300-700 words of total educational content across sections.
 """
     return system_prompt, user_prompt
 

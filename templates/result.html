@@ -87,10 +87,30 @@
       {% endif %}
     </div>
 
-    {% if result.related %}
+    {% if result.applications %}
       <div class="card flow-card">
         <div class="flow-heading">
           <span class="flow-icon">5</span>
+          <div>
+            <p class="eyebrow">Applications</p>
+            <h2>Real-world applications</h2>
+          </div>
+        </div>
+        <div class="roadmap-list">
+          {% for item in result.applications[:5] %}
+            <div class="roadmap-item">
+              <strong>{{ item.topic }}</strong>
+              <p>{{ item.why or item.learning_benefit or item.reason }}</p>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    {% endif %}
+
+    {% if result.related %}
+      <div class="card flow-card">
+        <div class="flow-heading">
+          <span class="flow-icon">6</span>
           <div>
             <p class="eyebrow">Related Topics</p>
             <h2>Useful connections</h2>
@@ -109,7 +129,7 @@
 
     <div class="card flow-card">
       <div class="flow-heading">
-        <span class="flow-icon">6</span>
+        <span class="flow-icon">7</span>
         <div>
           <p class="eyebrow">Take Quiz</p>
           <h2>Check your understanding</h2>

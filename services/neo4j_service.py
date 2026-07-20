@@ -81,6 +81,8 @@ def relation_to_type(relation):
         "NEXT_TOPIC",
         "RELATED_TO",
         "RELATED_TOPIC",
+        "APPLICATION_OF",
+        "USED_IN",
     }
 
     relation_type = str(relation or "").strip().upper()
@@ -430,15 +432,13 @@ def save_topic_suggestions(topic, before, after):
                             """
                             MERGE (before:Concept {name: $before_topic})
                             MERGE (topic:Concept {name: $topic})
-                            MERGE (before)-[:NEXT_TOPIC]->(topic)
-                            MERGE (topic)-[:PREREQUISITE_OF]->(before)
-                            MERGE (before)-[:RELATED_TO]->(topic)
+                            MERGE (before)-[:PREREQUISITE_OF]->(topic)
                             """,
                             before_topic=before_topic,
                             topic=clean_topic,
                         )
                         audit_tracker.neo4j_nodes += 2
-                        audit_tracker.neo4j_relationships += 3
+                        audit_tracker.neo4j_relationships += 1
                     except Exception as exc:
                         logger.error(f"[NEO4J INSERTION] Failed saving suggestion '{before_topic}' -> '{clean_topic}': {exc}")
 
@@ -449,14 +449,12 @@ def save_topic_suggestions(topic, before, after):
                             MERGE (topic:Concept {name: $topic})
                             MERGE (after:Concept {name: $after_topic})
                             MERGE (topic)-[:NEXT_TOPIC]->(after)
-                            MERGE (after)-[:PREREQUISITE_OF]->(topic)
-                            MERGE (topic)-[:RELATED_TO]->(after)
                             """,
                             topic=clean_topic,
                             after_topic=after_topic,
                         )
                         audit_tracker.neo4j_nodes += 2
-                        audit_tracker.neo4j_relationships += 3
+                        audit_tracker.neo4j_relationships += 1
                     except Exception as exc:
                         logger.error(f"[NEO4J INSERTION] Failed saving suggestion '{clean_topic}' -> '{after_topic}': {exc}")
     except Exception as exc:
@@ -534,27 +532,35 @@ def save_roadmap_to_neo4j(roadmap):
         logger.info(f"[NEO4J INSERTION] Skip saving roadmap: main topic '{topic}' is not valid.")
         return
 
-    # Collect all prerequisite items across all tiers
+    # Collect true prerequisite items (foundation_topics, beginner_topics, prerequisites)
     all_prereqs = []
-    for key in ("foundation_topics", "beginner_topics", "prerequisites", "intermediate_topics", "advanced_topics"):
+    seen_prereqs = set()
+    for key in ("foundation_topics", "beginner_topics", "prerequisites"):
         for item in roadmap.get(key, []):
             if isinstance(item, dict) and item.get("topic"):
                 t_clean = canonicalize_concept_name(item.get("topic"))
-                if is_valid_topic(t_clean) and t_clean.lower() != topic.lower():
+                if is_valid_topic(t_clean) and t_clean.lower() != topic.lower() and t_clean.lower() not in seen_prereqs:
+                    seen_prereqs.add(t_clean.lower())
                     all_prereqs.append({"topic": t_clean, "why": item.get("why", "")})
 
+    # Collect true progression items (next_topics, intermediate_topics, advanced_topics)
     next_items = []
-    for item in roadmap.get("next_topics", []):
-        if isinstance(item, dict) and item.get("topic"):
-            t_clean = canonicalize_concept_name(item.get("topic"))
-            if is_valid_topic(t_clean) and t_clean.lower() != topic.lower():
-                next_items.append({"topic": t_clean, "why": item.get("why", "")})
+    seen_next = set()
+    for key in ("next_topics", "intermediate_topics", "advanced_topics"):
+        for item in roadmap.get(key, []):
+            if isinstance(item, dict) and item.get("topic"):
+                t_clean = canonicalize_concept_name(item.get("topic"))
+                if is_valid_topic(t_clean) and t_clean.lower() != topic.lower() and t_clean.lower() not in seen_next and t_clean.lower() not in seen_prereqs:
+                    seen_next.add(t_clean.lower())
+                    next_items.append({"topic": t_clean, "why": item.get("why", "")})
 
     related_items = []
+    seen_rel = set()
     for item in roadmap.get("related_topics", []):
         if isinstance(item, dict) and item.get("topic"):
             t_clean = canonicalize_concept_name(item.get("topic"))
-            if is_valid_topic(t_clean) and t_clean.lower() != topic.lower():
+            if is_valid_topic(t_clean) and t_clean.lower() != topic.lower() and t_clean.lower() not in seen_rel and t_clean.lower() not in seen_prereqs and t_clean.lower() not in seen_next:
+                seen_rel.add(t_clean.lower())
                 related_items.append({"topic": t_clean, "why": item.get("why", "")})
 
     roadmap["topic"] = topic
@@ -571,6 +577,20 @@ def save_roadmap_to_neo4j(roadmap):
     try:
         with driver as drv:
             with drv.session() as session:
+                try:
+                    # Clean stale relationships for main topic before saving fresh structure
+                    session.run(
+                        """
+                        MATCH (t:Concept)
+                        WHERE toLower(t.name) = toLower($topic)
+                        OPTIONAL MATCH (t)-[r]-()
+                        DELETE r
+                        """,
+                        topic=roadmap["topic"],
+                    )
+                except Exception as exc:
+                    logger.error(f"[NEO4J INSERTION] Failed to clean stale relationships for '{roadmap['topic']}': {exc}")
+
                 try:
                     session.run(
                         """
