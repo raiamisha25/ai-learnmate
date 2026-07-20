@@ -11,6 +11,7 @@ import json
 
 from models.state import latest_quiz, latest_result
 from services.groq_service import safe_groq_generate
+from services.neo4j_service import fetch_raw_suggestions_from_neo4j
 from services.prompt_builders import build_topic_lecture_prompt
 from services.quiz_service import generate_quiz
 from services.recommendation_service import rank_recommendations
@@ -130,9 +131,22 @@ def process_input(topic=None, text=None):
     roadmap = get_or_create_roadmap(topic, context_text)
     lecture = get_or_create_topic_lecture(roadmap["topic"])
 
+    # Collect raw candidates from roadmap tiers
     raw_before = [item for item in roadmap.get("prerequisites", [])]
     raw_after = [item for item in roadmap.get("next_topics", [])]
     raw_related = [item for item in roadmap.get("related_topics", [])]
+
+    # Include roadmap intermediate/advanced topics as potential successor candidates if needed
+    for item in roadmap.get("intermediate_topics", []) + roadmap.get("advanced_topics", []):
+        if isinstance(item, dict) and item.get("topic"):
+            raw_after.append({"topic": item["topic"], "relation": "NEXT_TOPIC", "why": item.get("why", "")})
+
+    # Retrieve graph relationships from Neo4j
+    neo4j_records = fetch_raw_suggestions_from_neo4j(roadmap["topic"])
+    if neo4j_records:
+        g_item = neo4j_records[0]
+        raw_before.extend(g_item.get("before", []))
+        raw_after.extend(g_item.get("after", []))
 
     # Rank recommendations via recommendation_service.py
     ranked_before = rank_recommendations(raw_before, roadmap["topic"], limit=5)

@@ -56,6 +56,70 @@ CURATED_ROADMAPS = {
         "next_topics": [{"topic": "AVL Tree", "why": "AVL Trees maintain tree balance."}],
         "related_topics": [{"topic": "Tree Traversal", "why": "Visiting all nodes in defined order."}],
     },
+    "System Design": {
+        "topic": "System Design",
+        "definition": "System Design is the process of defining architecture, components, and interfaces for scalable systems.",
+        "why_it_matters": "It enables building high-traffic, resilient software systems.",
+        "example": "Designing scalable architectures like Netflix or Google.",
+        "explanation": "System Design synthesizes software engineering, networking, and distributed storage.",
+        "difficulty": "Advanced",
+        "estimated_study_time": "20-30 hours",
+        "foundation_topics": [
+            {"topic": "Programming Fundamentals", "why": "Core code execution principles."},
+            {"topic": "Object Oriented Programming", "why": "Modular component design."}
+        ],
+        "beginner_topics": [
+            {"topic": "Data Structures", "why": "In-memory data organization."},
+            {"topic": "Algorithms", "why": "Efficient computational procedures."}
+        ],
+        "intermediate_topics": [
+            {"topic": "Operating System", "why": "Process management and memory isolation."},
+            {"topic": "Computer Networks", "why": "TCP/IP, HTTP, and socket communication."},
+            {"topic": "Database", "why": "Relational and NoSQL persistence."}
+        ],
+        "advanced_topics": [
+            {"topic": "Concurrency", "why": "Multithreading and asynchronous execution."},
+            {"topic": "Distributed Systems", "why": "Consensus, partitioning, and replication."},
+            {"topic": "Caching", "why": "Low-latency memory storage like Redis."},
+            {"topic": "Load Balancing", "why": "Traffic distribution across servers."}
+        ],
+        "learning_milestones": ["Architect scalable backend", "Design distributed storage"],
+        "prerequisites": [{"topic": "Computer Networks", "why": "Networking fundamentals."}],
+        "next_topics": [{"topic": "Microservices Architecture", "why": "Decomposed service domains."}],
+        "related_topics": [{"topic": "Distributed Systems", "why": "Core architectural model."}],
+    },
+    "Machine Learning": {
+        "topic": "Machine Learning",
+        "definition": "Machine Learning focuses on algorithms that learn patterns from data to make predictions.",
+        "why_it_matters": "It powers modern AI, computer vision, natural language processing, and automated decision engines.",
+        "example": "Spam filters identifying spam emails automatically.",
+        "explanation": "Machine Learning combines linear algebra, statistics, and optimization algorithms.",
+        "difficulty": "Intermediate",
+        "estimated_study_time": "15-25 hours",
+        "foundation_topics": [
+            {"topic": "Programming Fundamentals", "why": "Algorithmic thinking."},
+            {"topic": "Python Programming", "why": "Primary language for ML frameworks."}
+        ],
+        "beginner_topics": [
+            {"topic": "Linear Algebra", "why": "Matrix and vector operations."},
+            {"topic": "Probability", "why": "Uncertainty modeling."},
+            {"topic": "Statistics", "why": "Data distribution analysis."}
+        ],
+        "intermediate_topics": [
+            {"topic": "Data Preprocessing", "why": "Feature scaling and cleaning."},
+            {"topic": "Supervised Learning", "why": "Regression and classification."},
+            {"topic": "Unsupervised Learning", "why": "Clustering and dimensionality reduction."}
+        ],
+        "advanced_topics": [
+            {"topic": "Model Evaluation", "why": "Precision, recall, and cross-validation."},
+            {"topic": "Neural Network", "why": "Deep learning architectures."},
+            {"topic": "Deep Learning", "why": "Advanced multi-layer networks."}
+        ],
+        "learning_milestones": ["Train predictive model", "Evaluate model accuracy"],
+        "prerequisites": [{"topic": "Statistics", "why": "Statistical foundation."}],
+        "next_topics": [{"topic": "Deep Learning", "why": "Complex neural architectures."}],
+        "related_topics": [{"topic": "Supervised Learning", "why": "Core ML paradigm."}],
+    },
 }
 
 
@@ -70,27 +134,27 @@ def clean_json_object(text):
 
 def fallback_roadmap(topic):
     clean_topic = canonicalize_concept_name(topic)
-    return CURATED_ROADMAPS.get(
-        clean_topic,
-        {
-            "topic": clean_topic,
-            "definition": f"{clean_topic} is a key educational topic that provides essential foundational concepts.",
-            "why_it_matters": "It builds a strong foundation for advanced problem solving.",
-            "example": "Like mastering basic tools before building a larger system.",
-            "explanation": f"Definition: {clean_topic} is an essential educational concept.\nWhy It Matters: It supports advanced learning.",
-            "difficulty": "Beginner",
-            "estimated_study_time": "3-5 hours",
-            "foundation_topics": [],
-            "beginner_topics": [],
-            "intermediate_topics": [],
-            "advanced_topics": [],
-            "optional_reading": [],
-            "learning_milestones": ["Understand core concept", "Solve basic exercises"],
-            "prerequisites": [],
-            "next_topics": [],
-            "related_topics": [],
-        },
-    )
+    if clean_topic in CURATED_ROADMAPS:
+        return CURATED_ROADMAPS[clean_topic]
+
+    return {
+        "topic": clean_topic,
+        "definition": f"{clean_topic} is a key educational topic that provides essential foundational concepts.",
+        "why_it_matters": "It builds a strong foundation for advanced problem solving.",
+        "example": "Like mastering basic tools before building a larger system.",
+        "explanation": f"Definition: {clean_topic} is an essential educational concept.\nWhy It Matters: It supports advanced learning.",
+        "difficulty": "Beginner",
+        "estimated_study_time": "3-5 hours",
+        "foundation_topics": [{"topic": "Programming Fundamentals", "why": f"Core foundation for {clean_topic}."}],
+        "beginner_topics": [{"topic": f"Basic {clean_topic} Concepts", "why": "Introductory domain concepts."}],
+        "intermediate_topics": [{"topic": f"Intermediate {clean_topic} Implementation", "why": "Practical core implementation."}],
+        "advanced_topics": [{"topic": f"Advanced {clean_topic} Applications", "why": "Complex applications."}],
+        "optional_reading": [{"topic": f"{clean_topic} Optimization", "why": "Performance considerations."}],
+        "learning_milestones": ["Understand core concept", "Solve basic exercises"],
+        "prerequisites": [{"topic": "Programming Fundamentals", "why": f"Foundational prerequisite for {clean_topic}."}],
+        "next_topics": [{"topic": f"Applied {clean_topic}", "why": "Next topic in learning path."}],
+        "related_topics": [{"topic": f"Advanced {clean_topic} Applications", "why": "Related domain topic."}],
+    }
 
 
 def validate_roadmap(data, requested_topic, is_from_pdf=False, context_text=None):
@@ -120,41 +184,15 @@ def validate_roadmap(data, requested_topic, is_from_pdf=False, context_text=None
     audit_tracker.accepted += 1
     logger.info(f"[ACCEPTED CONCEPT] Main topic '{main_topic}' accepted.")
 
-    cleaned = {
-        "topic": main_topic,
-        "definition": data.get("definition") or f"{main_topic} is a core academic topic.",
-        "why_it_matters": data.get("why_it_matters") or f"Understanding {main_topic} enables advanced domain mastery.",
-        "example": data.get("example") or f"Practical applications of {main_topic} in problem solving.",
-        "explanation": data.get("explanation") or f"Simple Definition: {main_topic}",
-        "difficulty": data.get("difficulty") or "Beginner",
-        "estimated_study_time": data.get("estimated_study_time") or "3-5 hours",
-        "foundation_topics": data.get("foundation_topics") or [],
-        "beginner_topics": data.get("beginner_topics") or [],
-        "intermediate_topics": data.get("intermediate_topics") or [],
-        "advanced_topics": data.get("advanced_topics") or [],
-        "optional_reading": data.get("optional_reading") or [],
-        "learning_milestones": data.get("learning_milestones") or ["Master core concept"],
-        "prerequisites": [],
-        "next_topics": [],
-        "related_topics": [],
-    }
-
-    seen_relations = set()
-    rel_map = {
-        "prerequisites": ("PREREQUISITE_OF", "prerequisites"),
-        "next_topics": ("NEXT_TOPIC", "next topics"),
-        "related_topics": ("RELATED_TOPIC", "related topics")
-    }
-
-    for key, (rel_type, label) in rel_map.items():
-        logger.info(f"[VALIDATION] Validating {label} for '{main_topic}'...")
-        for item in data.get(key, []):
+    def clean_topic_items(items, rel_type, label):
+        cleaned_list = []
+        seen_relations = set()
+        for item in items or []:
             if not isinstance(item, dict):
                 continue
-
             raw_item_topic = item.get("topic", "")
             item_topic = canonicalize_concept_name(raw_item_topic)
-            why = item.get("why", "")
+            why = item.get("why", f"{item_topic} relates to {main_topic}.")
 
             is_valid, reason = get_topic_validation_details(
                 item_topic,
@@ -178,11 +216,46 @@ def validate_roadmap(data, requested_topic, is_from_pdf=False, context_text=None
             seen_relations.add(rel_key)
             audit_tracker.seen_relationships.add(rel_key)
             audit_tracker.accepted += 1
-            logger.info(f"[ACCEPTED CONCEPT] Relationship: '{main_topic}' -[{rel_type}]-> '{item_topic}' accepted.")
+            cleaned_list.append({"topic": item_topic, "why": why})
+        return cleaned_list
 
-            cleaned[key].append({"topic": item_topic, "why": why})
+    foundation_clean = clean_topic_items(data.get("foundation_topics"), "PREREQUISITE_OF", "foundation topics")
+    beginner_clean = clean_topic_items(data.get("beginner_topics"), "PREREQUISITE_OF", "beginner topics")
+    intermediate_clean = clean_topic_items(data.get("intermediate_topics"), "PREREQUISITE_OF", "intermediate topics")
+    advanced_clean = clean_topic_items(data.get("advanced_topics"), "PREREQUISITE_OF", "advanced topics")
+    prereqs_clean = clean_topic_items(data.get("prerequisites"), "PREREQUISITE_OF", "prerequisites")
+    next_clean = clean_topic_items(data.get("next_topics"), "NEXT_TOPIC", "next topics")
+    related_clean = clean_topic_items(data.get("related_topics"), "RELATED_TOPIC", "related topics")
 
-    logger.info(f"[VALIDATION] Finished roadmap validation for '{main_topic}'.")
+    # Merge all prerequisite tiers into main prerequisites list for Neo4j and callers
+    all_prereqs = []
+    seen_prereqs = set()
+    for item in foundation_clean + beginner_clean + prereqs_clean + intermediate_clean + advanced_clean:
+        t_low = item["topic"].lower()
+        if t_low not in seen_prereqs and t_low != main_topic.lower():
+            seen_prereqs.add(t_low)
+            all_prereqs.append(item)
+
+    cleaned = {
+        "topic": main_topic,
+        "definition": data.get("definition") or f"{main_topic} is a core academic topic.",
+        "why_it_matters": data.get("why_it_matters") or f"Understanding {main_topic} enables advanced domain mastery.",
+        "example": data.get("example") or f"Practical applications of {main_topic} in problem solving.",
+        "explanation": data.get("explanation") or f"Simple Definition: {main_topic}",
+        "difficulty": data.get("difficulty") or "Beginner",
+        "estimated_study_time": data.get("estimated_study_time") or "3-5 hours",
+        "foundation_topics": foundation_clean,
+        "beginner_topics": beginner_clean,
+        "intermediate_topics": intermediate_clean,
+        "advanced_topics": advanced_clean,
+        "optional_reading": data.get("optional_reading") or [],
+        "learning_milestones": data.get("learning_milestones") or ["Master core concept"],
+        "prerequisites": all_prereqs,
+        "next_topics": next_clean,
+        "related_topics": related_clean,
+    }
+
+    logger.info(f"[VALIDATION] Finished roadmap validation for '{main_topic}'. Total prerequisites validated: {len(all_prereqs)}")
     return cleaned
 
 

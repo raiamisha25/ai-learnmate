@@ -2,12 +2,13 @@
 recommendation_service.py
 
 Responsible ONLY for:
-- Recommendation scoring, ranking, and filtering
+- Recommendation scoring, ranking, and filtering using configurable weights
 - Computing confidence scores
 - Generating educational explanations and learning benefits for recommendations
-- Curriculum ordering and educational dependency reasoning
+- Dynamic relationship-based educational dependency reasoning
 
-This service consumes graph data but does NOT execute Cypher queries directly.
+This service consumes graph data from Neo4j but does NOT execute Cypher queries directly.
+No hardcoded subject lookup tables exist here. Neo4j is the single source of truth.
 """
 
 from utils.topic_validator import canonicalize_concept_name, is_valid_topic, logger
@@ -21,54 +22,24 @@ RECOMMENDATION_WEIGHTS = {
     "goal": 0.05,
 }
 
-# Domain curriculum dependency maps for strong pedagogical recommendations
-CURRICULUM_PREREQUISITE_MAP = {
-    "linked list": ["Pointers", "Nodes", "Memory Allocation", "Arrays"],
-    "arraylist": ["Arrays", "Indexed Storage", "Object Oriented Programming"],
-    "binary tree": ["Recursion", "Linked List", "Tree Traversal", "Pointers"],
-    "avl tree": ["Binary Tree", "Binary Search Tree", "Tree BalanceFactor"],
-    "hashmap": ["Arrays", "Hash Function", "Collision Handling"],
-    "hashset": ["HashMap", "Hashing"],
-    "recursion": ["Functions", "Call Stack", "Base Case"],
-    "stack": ["Arrays", "Linked List", "Pointers"],
-    "queue": ["Arrays", "Linked List", "FIFO Principle"],
-    "graph": ["Linked List", "Recursion", "Depth First Search", "Breadth First Search"],
-    "operating system": ["Computer Architecture", "Processes", "Memory Management"],
-    "machine learning": ["Python Programming", "Linear Algebra", "Statistics", "Data Preprocessing"],
-    "supervised learning": ["Machine Learning", "Linear Regression", "Logistic Regression"],
-    "neural network": ["Machine Learning", "Linear Algebra", "Gradient Descent", "Backpropagation"],
-}
-
-CURRICULUM_NEXT_MAP = {
-    "linked list": ["Doubly Linked List", "Circular Linked List", "Stack", "Queue"],
-    "arraylist": ["Linked List", "HashMap", "Collections Framework"],
-    "binary tree": ["Binary Search Tree", "AVL Tree", "Heap", "Graphs"],
-    "avl tree": ["Red Black Tree", "B-Tree"],
-    "hashmap": ["HashSet", "Collision Handling", "ConcurrentHashMap"],
-    "recursion": ["Binary Tree", "Dynamic Programming", "Backtracking"],
-    "operating system": ["Process Scheduling", "Memory Management", "File Systems"],
-    "machine learning": ["Supervised Learning", "Unsupervised Learning", "Neural Network"],
-}
-
 
 def calculate_recommendation_score(candidate_name, target_topic, relation_type=None, graph_dist=1, user_goal=None):
     cand_lower = candidate_name.lower()
     target_lower = target_topic.lower()
+    rel_type_upper = str(relation_type or "").upper()
 
-    # 1. Prerequisite strength (0.0 to 1.0)
+    # 1. Prerequisite strength (0.0 to 1.0) based on graph relationship type
     prereq_score = 0.0
-    known_prereqs = [p.lower() for p in CURRICULUM_PREREQUISITE_MAP.get(target_lower, [])]
-    if cand_lower in known_prereqs or relation_type in ("PREREQUISITE", "PREREQUISITE_OF", "requires", "builds_on"):
+    if rel_type_upper in ("PREREQUISITE", "PREREQUISITE_OF", "REQUIRES", "BUILDS_ON"):
         prereq_score = 1.0
-    elif relation_type in ("USES", "IMPLEMENTS", "PART_OF"):
+    elif rel_type_upper in ("USES", "IMPLEMENTS", "PART_OF"):
         prereq_score = 0.7
 
-    # 2. Curriculum progression (0.0 to 1.0)
+    # 2. Curriculum progression (0.0 to 1.0) based on educational progression labels
     curriculum_score = 0.0
-    known_nexts = [n.lower() for n in CURRICULUM_NEXT_MAP.get(target_lower, [])]
-    if cand_lower in known_nexts or relation_type in ("NEXT_TOPIC", "EXTENDS", "ALTERNATIVE_TO", "SPECIAL_CASE_OF"):
+    if rel_type_upper in ("NEXT_TOPIC", "EXTENDS", "ALTERNATIVE_TO", "SPECIAL_CASE_OF", "BUILDS_ON"):
         curriculum_score = 1.0
-    elif cand_lower in known_prereqs:
+    elif rel_type_upper in ("PREREQUISITE", "PREREQUISITE_OF"):
         curriculum_score = 0.8
 
     # 3. Semantic similarity (0.0 to 1.0)
@@ -109,16 +80,20 @@ def calculate_recommendation_score(candidate_name, target_topic, relation_type=N
 def generate_recommendation_explanation(candidate_name, target_topic, relation_type, is_prerequisite):
     cand_clean = canonicalize_concept_name(candidate_name)
     target_clean = canonicalize_concept_name(target_topic)
+    rel_type_upper = str(relation_type or "").upper()
 
-    if is_prerequisite or relation_type in ("PREREQUISITE", "PREREQUISITE_OF", "requires"):
+    if is_prerequisite or rel_type_upper in ("PREREQUISITE", "PREREQUISITE_OF", "REQUIRES"):
         reason = f"{cand_clean} is a fundamental prerequisite for {target_clean}."
         benefit = f"Mastering {cand_clean} provides essential theoretical background required before studying {target_clean}."
-    elif relation_type in ("NEXT_TOPIC", "EXTENDS", "builds_on"):
+    elif rel_type_upper in ("NEXT_TOPIC", "EXTENDS", "BUILDS_ON"):
         reason = f"{cand_clean} builds directly upon concepts introduced in {target_clean}."
         benefit = f"Studying {cand_clean} applies knowledge from {target_clean} to more complex problem domains."
-    elif relation_type in ("USES", "IMPLEMENTS", "PART_OF"):
+    elif rel_type_upper in ("USES", "IMPLEMENTS", "PART_OF"):
         reason = f"{cand_clean} is a core structural component or implementation pattern used in {target_clean}."
         benefit = f"Understanding {cand_clean} reveals how {target_clean} is constructed under the hood."
+    elif rel_type_upper in ("SPECIAL_CASE_OF", "ALTERNATIVE_TO"):
+        reason = f"{cand_clean} is a specialized form or alternative approach connected with {target_clean}."
+        benefit = f"Learning {cand_clean} provides critical comparative insights alongside {target_clean}."
     else:
         reason = f"{cand_clean} shares complementary concepts with {target_clean}."
         benefit = f"Learning {cand_clean} broadens your domain understanding alongside {target_clean}."
@@ -152,7 +127,8 @@ def rank_recommendations(raw_suggestions, target_topic, user_goal=None, limit=5)
 
         seen_names.add(cand_name.lower())
 
-        is_prereq = cand_name.lower() in [p.lower() for p in CURRICULUM_PREREQUISITE_MAP.get(target_clean.lower(), [])]
+        rel_upper = rel_type.upper()
+        is_prereq = rel_upper in ("PREREQUISITE", "PREREQUISITE_OF", "REQUIRES")
         score, confidence = calculate_recommendation_score(
             cand_name, target_clean, relation_type=rel_type, user_goal=user_goal
         )

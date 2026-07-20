@@ -9,7 +9,7 @@ Responsible ONLY for:
 - Persistence
 
 Educational ranking, recommendation scoring, and explanation generation
-are delegated to recommendation_service.py.
+are delegated to recommendation_service.py. Neo4j is the single source of truth.
 """
 
 import os
@@ -281,8 +281,8 @@ def fetch_graph_from_neo4j():
 
 def fetch_raw_suggestions_from_neo4j(topic=None):
     """
-    Fetch raw graph relationships from Neo4j without executing educational ranking.
-    Returns list of dicts with subject, object, relation, and why.
+    Fetch all raw graph relationships from Neo4j without executing educational ranking.
+    Matches all educational relationship types in Cypher.
     """
     try:
         with get_neo4j_driver() as driver:
@@ -336,6 +336,41 @@ def fetch_raw_suggestions_from_neo4j(topic=None):
                 return results
     except Exception as exc:
         logger.error(f"[NEO4J INSERTION] Could not fetch raw suggestions: {exc}")
+        return []
+
+
+def fetch_prerequisite_chain_from_neo4j(topic, max_depth=5):
+    """
+    Recursively traverse incoming prerequisite paths in Neo4j up to max_depth levels.
+    Returns ordered list of prerequisite topic names from foundational root to target topic.
+    """
+    clean_t = canonicalize_concept_name(topic)
+    try:
+        with get_neo4j_driver() as driver:
+            with driver.session() as session:
+                result = session.run(
+                    """
+                    MATCH path = (start:Concept)-[:PREREQUISITE_OF]->(target:Concept)
+                    WHERE toLower(target.name) = toLower($topic)
+                    RETURN [node in nodes(path) | node.name] AS chain
+                    LIMIT 15
+                    """,
+                    topic=clean_t,
+                )
+                
+                ordered_chain = []
+                seen = set()
+                for record in result:
+                    chain_nodes = record["chain"] or []
+                    for node in chain_nodes:
+                        c_name = canonicalize_concept_name(node)
+                        if c_name and is_valid_topic(c_name) and c_name.lower() not in seen:
+                            seen.add(c_name.lower())
+                            ordered_chain.append(c_name)
+                            
+                return ordered_chain
+    except Exception as exc:
+        logger.error(f"[NEO4J INSERTION] Could not fetch prerequisite chain for '{topic}': {exc}")
         return []
 
 
@@ -499,23 +534,33 @@ def save_roadmap_to_neo4j(roadmap):
         logger.info(f"[NEO4J INSERTION] Skip saving roadmap: main topic '{topic}' is not valid.")
         return
 
-    for key in ("prerequisites", "next_topics", "related_topics"):
-        valid_topics = set(
-            validate_concepts(
-                [canonicalize_concept_name(item.get("topic")) for item in roadmap.get(key, [])],
-                limit=5,
-            )
-        )
-        roadmap[key] = [
-            {**item, "topic": canonicalize_concept_name(item.get("topic"))}
-            for item in roadmap.get(key, [])
-            if canonicalize_concept_name(item.get("topic")) in valid_topics
-        ]
-    roadmap["topic"] = topic
+    # Collect all prerequisite items across all tiers
+    all_prereqs = []
+    for key in ("foundation_topics", "beginner_topics", "prerequisites", "intermediate_topics", "advanced_topics"):
+        for item in roadmap.get(key, []):
+            if isinstance(item, dict) and item.get("topic"):
+                t_clean = canonicalize_concept_name(item.get("topic"))
+                if is_valid_topic(t_clean) and t_clean.lower() != topic.lower():
+                    all_prereqs.append({"topic": t_clean, "why": item.get("why", "")})
 
-    if not any(roadmap.get(key) for key in ("prerequisites", "next_topics", "related_topics")):
-        logger.info(f"[NEO4J INSERTION] Skip saving roadmap for '{topic}': no valid related topics.")
-        return
+    next_items = []
+    for item in roadmap.get("next_topics", []):
+        if isinstance(item, dict) and item.get("topic"):
+            t_clean = canonicalize_concept_name(item.get("topic"))
+            if is_valid_topic(t_clean) and t_clean.lower() != topic.lower():
+                next_items.append({"topic": t_clean, "why": item.get("why", "")})
+
+    related_items = []
+    for item in roadmap.get("related_topics", []):
+        if isinstance(item, dict) and item.get("topic"):
+            t_clean = canonicalize_concept_name(item.get("topic"))
+            if is_valid_topic(t_clean) and t_clean.lower() != topic.lower():
+                related_items.append({"topic": t_clean, "why": item.get("why", "")})
+
+    roadmap["topic"] = topic
+    roadmap["prerequisites"] = all_prereqs
+    roadmap["next_topics"] = next_items
+    roadmap["related_topics"] = related_items
 
     try:
         driver = get_neo4j_driver()
@@ -546,7 +591,7 @@ def save_roadmap_to_neo4j(roadmap):
                         why_it_matters=roadmap.get("why_it_matters"),
                         example=roadmap.get("example"),
                         difficulty=roadmap.get("difficulty"),
-                        estimated_time=roadmap.get("estimated_time"),
+                        estimated_time=roadmap.get("estimated_study_time"),
                     )
                     audit_tracker.neo4j_nodes += 1
                     logger.info(f"[NEO4J INSERTION] Merged concept node: '{roadmap['topic']}'")

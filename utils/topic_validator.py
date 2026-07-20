@@ -114,8 +114,8 @@ ADJECTIVES = {
 
 KNOWN_EDUCATIONAL_TOPICS = {
     "arrays", "functions", "base case", "arraylist", "linked list", "binary tree", "avl tree", "recursion",
-    "hashmap", "hashset", "dynamic programming", "operating system",
-    "machine learning", "neural network", "database", "graph", "heap",
+    "hashmap", "hashset", "dynamic programming", "operating system", "operating systems",
+    "machine learning", "neural network", "database", "databases", "graph", "heap",
     "stack", "queue", "sorting", "searching", "object oriented programming",
     "process scheduling", "memory management", "supervised learning",
     "array", "linked lists", "binary search tree", "tree traversal",
@@ -128,19 +128,26 @@ KNOWN_EDUCATIONAL_TOPICS = {
     "hash function", "collision handling", "dictionary", "time complexity",
     "data preprocessing", "pointers", "pointer", "nodes", "node", "memory allocation",
     "processes", "computer architecture", "tree", "trees", "matrix", "vectors",
+    "programming fundamentals", "programming fundamental", "data structures", "algorithms",
+    "computer networks", "network fundamental", "concurrency", "distributed systems",
+    "caching", "load balancing", "system design", "linear algebra", "probability",
+    "statistics", "model evaluation", "deep learning", "python programming",
+    "quantum mechanics", "quantum computing", "microservices architecture",
 }
 
 TECHNICAL_SIGNALS = {
-    "algorithm", "algebra", "array", "backpropagation", "biology", "case",
+    "algorithm", "algorithms", "algebra", "array", "backpropagation", "biology", "case",
     "cell", "classification", "clustering", "collection", "complexity",
-    "database", "descent", "dna", "dynamic", "enzyme", "forest", "function",
+    "database", "databases", "descent", "dna", "dynamic", "enzyme", "forest", "function",
     "graph", "hash", "heap", "learning", "linear", "linked", "list",
-    "machine", "management", "memory", "mitochondria", "network", "neural",
+    "machine", "management", "memory", "mitochondria", "network", "networks", "neural",
     "operating", "overfitting", "pointer", "pointers", "node", "nodes",
     "programming", "queue", "recursion", "regression", "scheduling", "search",
-    "stack", "structure", "supervised", "system", "tree", "traversal",
+    "stack", "structure", "structures", "supervised", "system", "systems", "tree", "traversal",
     "framework", "architecture", "security", "cryptography", "polity",
-    "geography", "economy", "ethics",
+    "geography", "economy", "ethics", "concurrency", "caching", "balancing",
+    "design", "probability", "statistics", "evaluation", "physics", "mechanics",
+    "quantum", "fundamental", "fundamentals",
 }
 
 SPECIAL_CASES = {
@@ -165,6 +172,8 @@ SPECIAL_CASES = {
     "cpu": "CPU",
     "ram": "RAM",
     "os": "OS",
+    "programming fundamental": "Programming Fundamentals",
+    "programming fundamentals": "Programming Fundamentals",
 }
 
 
@@ -196,9 +205,11 @@ def canonicalize_concept_name(name):
         lower_last = last_word.lower()
 
         singular_exceptions = {
-            'process', 'database', 'statistics', 'analysis', 'hypothesis',
-            'oss', 'dbms', 'gps', 'graphics', 'physics', 'mathematics',
-            'coordinates', 'class', 'bias', 'canvas', 'networks', 'neural networks'
+            'process', 'processes', 'database', 'databases', 'statistics', 'analysis', 'hypothesis',
+            'oss', 'dbms', 'gps', 'graphics', 'physics', 'mathematics', 'mechanics', 'quantum mechanics',
+            'coordinates', 'class', 'bias', 'canvas', 'networks', 'neural networks', 'computer networks',
+            'systems', 'distributed systems', 'operating systems', 'file systems',
+            'fundamentals', 'programming fundamentals', 'data structures', 'algorithms'
         }
 
         is_except = False
@@ -230,6 +241,7 @@ def canonicalize_concept_name(name):
     words = cleaned.split()
     for i, word in enumerate(words):
         lower_word = word.lower()
+        full_cand = " ".join(words[:i+1]).lower()
         if lower_word in SPECIAL_CASES:
             words[i] = SPECIAL_CASES[lower_word]
         elif word.isupper() and len(word) >= 2:
@@ -238,6 +250,8 @@ def canonicalize_concept_name(name):
             words[i] = word.capitalize()
 
     final_cleaned = " ".join(words)
+    if final_cleaned.lower() in SPECIAL_CASES:
+        final_cleaned = SPECIAL_CASES[final_cleaned.lower()]
 
     if name != final_cleaned:
         logger.info(f"[CANONICALIZATION] Normalized: '{name}' -> '{final_cleaned}'")
@@ -396,6 +410,7 @@ def get_topic_validation_details(topic, pdf_text=None, ai_topics=None, curated_t
             "rna", "enzyme", "chromosome", "overfitting", "underfitting",
             "python", "java", "sql", "http", "api", "upsc", "gate", "cat",
             "pointer", "pointers", "node", "nodes", "tree", "trees", "vector", "matrix",
+            "statistics", "probability", "caching", "concurrency",
         }
         if lower not in allowed_single:
             audit_tracker.rejected += 1
@@ -452,6 +467,7 @@ def is_valid_topic(topic, approved_topics=None):
             "rna", "enzyme", "chromosome", "overfitting", "underfitting",
             "python", "java", "sql", "http", "api", "upsc", "gate", "cat",
             "pointer", "pointers", "node", "nodes", "tree", "trees", "vector", "matrix",
+            "statistics", "probability", "caching", "concurrency",
         }
         if lower not in allowed_single:
             return False
