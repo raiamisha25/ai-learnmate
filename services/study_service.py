@@ -12,7 +12,7 @@ import re
 
 from models.state import latest_quiz, latest_result
 from services.groq_service import safe_groq_generate
-from services.neo4j_service import fetch_raw_suggestions_from_neo4j
+from services.neo4j_service import fetch_prerequisite_chain_from_neo4j, fetch_raw_suggestions_from_neo4j
 from services.prompt_builders import build_topic_lecture_prompt
 from services.quiz_service import generate_quiz
 from services.recommendation_service import categorize_and_rank_recommendations
@@ -248,6 +248,7 @@ def infer_topic_from_text(text):
 
 
 def process_input(topic=None, text=None):
+    raw_query = topic or (text[:30] if text else "Learning Topic")
     if text:
         topic = infer_topic_from_text(text)
         context_text = text
@@ -256,7 +257,14 @@ def process_input(topic=None, text=None):
         topic = topic or "Learning Topic"
 
     roadmap = get_or_create_roadmap(topic, context_text)
-    lecture = get_or_create_topic_lecture(roadmap["topic"])
+    canonical_topic = roadmap["topic"]
+
+    # Diagnostic Logging: Pipeline Entry
+    logger.info(f"\n--- [DIAGNOSTIC PREREQUISITE RETRIEVAL] ---")
+    logger.info(f"User Query: '{raw_query}'")
+    logger.info(f"Canonical Topic: '{canonical_topic}'")
+
+    lecture = get_or_create_topic_lecture(canonical_topic)
 
     # Collect raw candidates by source direction and relationship type
     raw_candidates_by_source = {
@@ -279,21 +287,40 @@ def process_input(topic=None, text=None):
             raw_candidates_by_source["related"].append({"topic": item["topic"], "relation": "RELATED_TO", "why": item.get("why", "")})
 
     # Retrieve graph relationships from Neo4j
-    neo4j_records = fetch_raw_suggestions_from_neo4j(roadmap["topic"])
+    neo4j_records = fetch_raw_suggestions_from_neo4j(canonical_topic)
     if neo4j_records:
         g_item = neo4j_records[0]
         raw_candidates_by_source["before"].extend(g_item.get("before", []))
         raw_candidates_by_source["after"].extend(g_item.get("after", []))
 
+    # Retrieve multi-hop prerequisite chain from Neo4j
+    multihop_chain = fetch_prerequisite_chain_from_neo4j(canonical_topic, max_depth=5)
+    for chain_topic in multihop_chain:
+        raw_candidates_by_source["before"].append({
+            "topic": chain_topic,
+            "relation": "PREREQUISITE_OF",
+            "why": f"{chain_topic} is a foundational prerequisite in the learning graph for {canonical_topic}."
+        })
+
+    # Diagnostic Logging: Raw Relationships Retrieved
+    retrieved_before = [c["topic"] for c in raw_candidates_by_source["before"]]
+    logger.info(f"Neo4j Query: Multi-hop incoming PREREQUISITE_OF paths up to 5 levels for '{canonical_topic}'")
+    logger.info(f"Relationships Retrieved (Before): {retrieved_before}")
+
     # Categorize and rank recommendations into distinct sections with cross-section deduplication
     categorized = categorize_and_rank_recommendations(
-        raw_candidates_by_source, roadmap["topic"], limit=5
+        raw_candidates_by_source, canonical_topic, limit=5
     )
 
     ranked_before = categorized["before"]
     ranked_after = categorized["after"]
     ranked_related = categorized["related"]
     ranked_applications = categorized["applications"]
+
+    # Diagnostic Logging: Final Prerequisite List after Deduplication and Ranking
+    final_prereq_names = [item["topic"] for item in ranked_before]
+    logger.info(f"Final Prerequisite List: {final_prereq_names}")
+    logger.info(f"---------------------------------------------\n")
 
     quiz_context = "\n".join(
         [
@@ -304,12 +331,12 @@ def process_input(topic=None, text=None):
         ]
     )
 
-    quiz_data = generate_quiz(roadmap["topic"], quiz_context)
+    quiz_data = generate_quiz(canonical_topic, quiz_context)
     latest_quiz.clear()
     latest_quiz.extend(quiz_data)
 
     result = {
-        "topic": roadmap["topic"],
+        "topic": canonical_topic,
         "summary": lecture.get("explanation"),
         "analogy": lecture.get("analogy") or lecture.get("real_world_analogy"),
         "definition": lecture.get("definition"),

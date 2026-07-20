@@ -284,7 +284,7 @@ def fetch_graph_from_neo4j():
 def fetch_raw_suggestions_from_neo4j(topic=None):
     """
     Fetch all raw graph relationships from Neo4j without executing educational ranking.
-    Matches all educational relationship types in Cypher.
+    Uses multi-hop path traversal up to 5 levels for prerequisite retrieval.
     """
     try:
         with get_neo4j_driver() as driver:
@@ -295,11 +295,20 @@ def fetch_raw_suggestions_from_neo4j(topic=None):
                         """
                         MATCH (t:Concept)
                         WHERE toLower(t.name) = toLower($topic)
-                        OPTIONAL MATCH (before:Concept)-[r1]->(t)
+                        OPTIONAL MATCH path = (before:Concept)-[r1:PREREQUISITE_OF|PREREQUISITE*1..5]->(t)
                         OPTIONAL MATCH (t)-[r2]->(after:Concept)
-                        RETURN t.name AS topic,
-                               collect(DISTINCT {topic: before.name, relation: coalesce(r1.label, type(r1)), why: r1.why}) AS before_items,
-                               collect(DISTINCT {topic: after.name, relation: coalesce(r2.label, type(r2)), why: r2.why}) AS after_items
+                        WITH t,
+                             collect(DISTINCT {
+                                 topic: before.name,
+                                 relation: coalesce(relationships(path)[0].label, type(relationships(path)[0]), 'PREREQUISITE_OF'),
+                                 why: relationships(path)[0].why
+                             }) AS before_items,
+                             collect(DISTINCT {
+                                 topic: after.name,
+                                 relation: coalesce(r2.label, type(r2)),
+                                 why: r2.why
+                             }) AS after_items
+                        RETURN t.name AS topic, before_items, after_items
                         """,
                         topic=clean_t,
                     )
@@ -307,11 +316,20 @@ def fetch_raw_suggestions_from_neo4j(topic=None):
                     records = session.run(
                         """
                         MATCH (t:Concept)
-                        OPTIONAL MATCH (before:Concept)-[r1]->(t)
+                        OPTIONAL MATCH path = (before:Concept)-[r1:PREREQUISITE_OF|PREREQUISITE*1..5]->(t)
                         OPTIONAL MATCH (t)-[r2]->(after:Concept)
-                        RETURN t.name AS topic,
-                               collect(DISTINCT {topic: before.name, relation: coalesce(r1.label, type(r1)), why: r1.why}) AS before_items,
-                               collect(DISTINCT {topic: after.name, relation: coalesce(r2.label, type(r2)), why: r2.why}) AS after_items
+                        WITH t,
+                             collect(DISTINCT {
+                                 topic: before.name,
+                                 relation: coalesce(relationships(path)[0].label, type(relationships(path)[0]), 'PREREQUISITE_OF'),
+                                 why: relationships(path)[0].why
+                             }) AS before_items,
+                             collect(DISTINCT {
+                                 topic: after.name,
+                                 relation: coalesce(r2.label, type(r2)),
+                                 why: r2.why
+                             }) AS after_items
+                        RETURN t.name AS topic, before_items, after_items
                         ORDER BY t.name
                         """
                     )
@@ -352,7 +370,7 @@ def fetch_prerequisite_chain_from_neo4j(topic, max_depth=5):
             with driver.session() as session:
                 result = session.run(
                     """
-                    MATCH path = (start:Concept)-[:PREREQUISITE_OF]->(target:Concept)
+                    MATCH path = (start:Concept)-[:PREREQUISITE_OF|PREREQUISITE*1..5]->(target:Concept)
                     WHERE toLower(target.name) = toLower($topic)
                     RETURN [node in nodes(path) | node.name] AS chain
                     LIMIT 15
@@ -366,7 +384,7 @@ def fetch_prerequisite_chain_from_neo4j(topic, max_depth=5):
                     chain_nodes = record["chain"] or []
                     for node in chain_nodes:
                         c_name = canonicalize_concept_name(node)
-                        if c_name and is_valid_topic(c_name) and c_name.lower() not in seen:
+                        if c_name and is_valid_topic(c_name) and c_name.lower() not in seen and c_name.lower() != clean_t.lower():
                             seen.add(c_name.lower())
                             ordered_chain.append(c_name)
                             

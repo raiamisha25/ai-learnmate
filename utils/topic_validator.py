@@ -133,21 +133,23 @@ KNOWN_EDUCATIONAL_TOPICS = {
     "caching", "load balancing", "system design", "linear algebra", "probability",
     "statistics", "model evaluation", "deep learning", "python programming",
     "quantum mechanics", "quantum computing", "microservices architecture",
+    "quick sort", "merge sort", "bubble sort", "insertion sort", "selection sort",
+    "radix sort", "heap sort", "hash table", "hash tables", "hashing", "sorting algorithms",
 }
 
 TECHNICAL_SIGNALS = {
     "algorithm", "algorithms", "algebra", "array", "backpropagation", "biology", "case",
     "cell", "classification", "clustering", "collection", "complexity",
     "database", "databases", "descent", "dna", "dynamic", "enzyme", "forest", "function",
-    "graph", "hash", "heap", "learning", "linear", "linked", "list",
+    "graph", "hash", "hashing", "heap", "learning", "linear", "linked", "list",
     "machine", "management", "memory", "mitochondria", "network", "networks", "neural",
     "operating", "overfitting", "pointer", "pointers", "node", "nodes",
     "programming", "queue", "recursion", "regression", "scheduling", "search",
-    "stack", "structure", "structures", "supervised", "system", "systems", "tree", "traversal",
+    "sort", "sorting", "stack", "structure", "structures", "supervised", "system", "systems", "tree", "traversal",
     "framework", "architecture", "security", "cryptography", "polity",
     "geography", "economy", "ethics", "concurrency", "caching", "balancing",
     "design", "probability", "statistics", "evaluation", "physics", "mechanics",
-    "quantum", "fundamental", "fundamentals",
+    "quantum", "fundamental", "fundamentals", "table", "tables",
 }
 
 SPECIAL_CASES = {
@@ -410,7 +412,7 @@ def get_topic_validation_details(topic, pdf_text=None, ai_topics=None, curated_t
             "rna", "enzyme", "chromosome", "overfitting", "underfitting",
             "python", "java", "sql", "http", "api", "upsc", "gate", "cat",
             "pointer", "pointers", "node", "nodes", "tree", "trees", "vector", "matrix",
-            "statistics", "probability", "caching", "concurrency",
+            "statistics", "probability", "caching", "concurrency", "sort", "sorting",
         }
         if lower not in allowed_single:
             audit_tracker.rejected += 1
@@ -467,7 +469,7 @@ def is_valid_topic(topic, approved_topics=None):
             "rna", "enzyme", "chromosome", "overfitting", "underfitting",
             "python", "java", "sql", "http", "api", "upsc", "gate", "cat",
             "pointer", "pointers", "node", "nodes", "tree", "trees", "vector", "matrix",
-            "statistics", "probability", "caching", "concurrency",
+            "statistics", "probability", "caching", "concurrency", "sort", "sorting",
         }
         if lower not in allowed_single:
             return False
