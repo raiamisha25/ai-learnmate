@@ -2,7 +2,17 @@ import json
 
 from services.groq_service import safe_groq_generate
 from services.neo4j_service import fetch_roadmap_from_neo4j, save_roadmap_to_neo4j
-from utils.topic_validator import filter_valid_topics, is_valid_topic, normalize_topic_name
+from utils.topic_validator import (
+    KNOWN_EDUCATIONAL_TOPICS,
+    audit_tracker,
+    canonicalize_concept_name,
+    filter_valid_topics,
+    get_topic_validation_details,
+    is_valid_relationship,
+    is_valid_topic,
+    logger,
+    normalize_topic_name,
+)
 
 
 ROADMAP_SYSTEM_PROMPT = """
@@ -175,7 +185,7 @@ def clean_json_object(text):
 
 
 def fallback_roadmap(topic):
-    clean_topic = normalize_topic_name(topic)
+    clean_topic = canonicalize_concept_name(topic)
     return CURATED_ROADMAPS.get(
         clean_topic,
         {
@@ -197,79 +207,152 @@ def fallback_roadmap(topic):
     )
 
 
-def validate_roadmap(data, requested_topic, is_from_pdf=False):
-    topic = normalize_topic_name(data.get("topic") or requested_topic)
-    if not is_valid_topic(topic):
-        topic = normalize_topic_name(requested_topic)
+def validate_roadmap(data, requested_topic, is_from_pdf=False, context_text=None):
+    logger.info(f"[VALIDATION] Starting validation for topic '{requested_topic}'...")
 
-    approved = [topic]
+    # 1. Canonicalize and validate main topic
+    raw_main_topic = data.get("topic") or requested_topic
+    main_topic = canonicalize_concept_name(raw_main_topic)
 
+    # Pre-collect all AI topics for hallucination check
+    all_ai_topics = {main_topic.lower()}
     for key in ("prerequisites", "next_topics", "related_topics"):
-        approved.extend(item.get("topic", "") for item in data.get(key, []) if isinstance(item, dict))
+        for item in data.get(key, []):
+            if isinstance(item, dict) and item.get("topic"):
+                all_ai_topics.add(canonicalize_concept_name(item.get("topic")).lower())
+
+    is_main_valid, main_reason = get_topic_validation_details(
+        main_topic,
+        pdf_text=context_text,
+        ai_topics=all_ai_topics,
+        curated_topics=KNOWN_EDUCATIONAL_TOPICS
+    )
+
+    if not is_main_valid:
+        logger.info(f"[REJECTED CONCEPT] Main topic '{main_topic}' rejected: {main_reason}. Falling back to requested topic.")
+        main_topic = canonicalize_concept_name(requested_topic)
+        # Re-validate fallback requested topic
+        is_main_valid, main_reason = get_topic_validation_details(
+            main_topic,
+            pdf_text=context_text,
+            ai_topics=all_ai_topics,
+            curated_topics=KNOWN_EDUCATIONAL_TOPICS
+        )
+        if not is_main_valid:
+            main_topic = canonicalize_concept_name(requested_topic)
+            logger.info(f"[VALIDATION] Fallback topic '{main_topic}' used despite validation warning.")
+
+    audit_tracker.seen_concepts.add(main_topic.lower())
+    audit_tracker.accepted += 1
+    logger.info(f"[ACCEPTED CONCEPT] Main topic '{main_topic}' accepted.")
+
+    # Validate main topic descriptive fields
+    definition = data.get("definition") or ""
+    why_it_matters = data.get("why_it_matters") or ""
+    example = data.get("example") or ""
+    analogy = data.get("analogy") or ""
+
+    if not definition or len(definition.strip()) < 10:
+        logger.info(f"[REJECTED CONCEPT] Incomplete field: 'definition' for '{main_topic}' is missing or too short.")
+        definition = f"{main_topic} is a key educational topic in this study domain."
+    if not why_it_matters or len(why_it_matters.strip()) < 10:
+        logger.info(f"[REJECTED CONCEPT] Incomplete field: 'why_it_matters' for '{main_topic}' is missing or too short.")
+        why_it_matters = f"Mastering {main_topic} provides a fundamental foundation for learning advanced concepts."
+    if not example or len(example.strip()) < 10:
+        example = f"Practice applying {main_topic} in hands-on exercises."
 
     cleaned = {
-        "topic": topic,
-        "definition": data.get("definition") or fallback_roadmap(topic).get("definition"),
-        "why_it_matters": data.get("why_it_matters") or fallback_roadmap(topic).get("why_it_matters"),
-        "example": data.get("example") or fallback_roadmap(topic).get("example"),
+        "topic": main_topic,
+        "definition": definition,
+        "why_it_matters": why_it_matters,
+        "example": example,
         "explanation": "",
-        "analogy": data.get("analogy") or "Think of it as one step in a larger learning path.",
-        "common_mistakes": data.get("common_mistakes") or fallback_roadmap(topic).get("common_mistakes"),
-        "interview_questions": data.get("interview_questions") or fallback_roadmap(topic).get("interview_questions"),
-        "when_to_study_next": data.get("when_to_study_next") or fallback_roadmap(topic).get("when_to_study_next"),
+        "analogy": analogy or "Think of it as a tool you learn before using it in a larger project.",
+        "common_mistakes": data.get("common_mistakes") or "Memorizing code or theory without practical application.",
+        "interview_questions": data.get("interview_questions") or f"What problem does {main_topic} solve? When would you use it?",
+        "when_to_study_next": data.get("when_to_study_next") or "When you can solve simple examples without assistance.",
         "difficulty": data.get("difficulty") or "Beginner",
         "estimated_time": data.get("estimated_time") or "2-4 hours",
         "prerequisites": [],
         "next_topics": [],
         "related_topics": [],
     }
-    cleaned["explanation"] = format_explanation(cleaned)
 
-    for key in ("prerequisites", "next_topics", "related_topics"):
-        topics = filter_valid_topics(
-            [item.get("topic", "") for item in data.get(key, []) if isinstance(item, dict)],
-            limit=5,
-        )
-        for topic_name in topics:
-            source = next(
-                (item for item in data.get(key, []) if normalize_topic_name(item.get("topic", "")) == topic_name),
-                {},
-            )
-            cleaned[key].append(
-                {
-                    "topic": topic_name,
-                    "why": source.get("why") or f"{topic_name} helps you understand {cleaned['topic']}.",
-                }
-            )
+    # 2. Validate prerequisites, next_topics, related_topics
+    seen_relations = set()
 
+    rel_map = {
+        "prerequisites": ("PREREQUISITE_OF", "prerequisites"),
+        "next_topics": ("NEXT_TOPIC", "next topics"),
+        "related_topics": ("RELATED_TOPIC", "related topics")
+    }
+
+    for key, (rel_type, label) in rel_map.items():
+        logger.info(f"[VALIDATION] Validating {label} for '{main_topic}'...")
+        for item in data.get(key, []):
+            if not isinstance(item, dict):
+                logger.info(f"[REJECTED CONCEPT] Invalid item format in {label} (not a dict): {item}")
+                continue
+
+            raw_item_topic = item.get("topic", "")
+            item_topic = canonicalize_concept_name(raw_item_topic)
+            why = item.get("why", "")
+
+            # Validate name
+            is_valid, reason = get_topic_validation_details(
+                item_topic,
+                pdf_text=context_text,
+                ai_topics=all_ai_topics,
+                curated_topics=KNOWN_EDUCATIONAL_TOPICS
+            )
+            if not is_valid:
+                logger.info(f"[REJECTED CONCEPT] Concept '{item_topic}' in {label} rejected: {reason}")
+                continue
+
+            # Validate relationship
+            is_rel_valid, rel_reason = is_valid_relationship(
+                main_topic, item_topic, rel_type, why, seen_relations
+            )
+            if not is_rel_valid:
+                logger.info(f"[REJECTED CONCEPT] Relationship '{main_topic}' -[{rel_type}]-> '{item_topic}' rejected: {rel_reason}")
+                continue
+
+            audit_tracker.seen_concepts.add(item_topic.lower())
+            rel_key = (main_topic.lower(), rel_type, item_topic.lower())
+            seen_relations.add(rel_key)
+            audit_tracker.seen_relationships.add(rel_key)
+            audit_tracker.accepted += 1
+            logger.info(f"[ACCEPTED CONCEPT] Relationship: '{main_topic}' -[{rel_type}]-> '{item_topic}' accepted.")
+
+            cleaned[key].append({
+                "topic": item_topic,
+                "why": why
+            })
+
+    # Curation fallback enrichment if needed
     if not is_from_pdf:
         curated = fallback_roadmap(cleaned["topic"])
         if curated.get("topic") == cleaned["topic"]:
-            for key in ("prerequisites", "next_topics", "related_topics"):
-                add_curated_items(cleaned, curated, key)
+            for key, (rel_type, label) in rel_map.items():
+                existing = {it["topic"].lower() for it in cleaned[key]}
+                for cur_item in curated.get(key, []):
+                    if len(cleaned[key]) >= 5:
+                        break
+                    cur_topic = canonicalize_concept_name(cur_item.get("topic", ""))
+                    if not cur_topic or cur_topic.lower() in existing:
+                        continue
 
+                    why = cur_item.get("why") or f"{cur_topic} supports {cleaned['topic']}."
+                    cleaned[key].append({
+                        "topic": cur_topic,
+                        "why": why
+                    })
+                    existing.add(cur_topic.lower())
+                    audit_tracker.seen_concepts.add(cur_topic.lower())
+
+    cleaned["explanation"] = format_explanation(cleaned)
+    logger.info(f"[VALIDATION] Finished validation for '{main_topic}'.")
     return cleaned
-
-
-def add_curated_items(cleaned, curated, key):
-    """Fill weak AI sections with trusted beginner roadmap items."""
-    existing = {item["topic"].lower() for item in cleaned.get(key, [])}
-
-    for item in curated.get(key, []):
-        if len(cleaned[key]) >= 5:
-            break
-
-        topic_name = item.get("topic", "")
-        if not topic_name or topic_name.lower() in existing:
-            continue
-
-        cleaned[key].append(
-            {
-                "topic": topic_name,
-                "why": item.get("why") or f"{topic_name} supports {cleaned['topic']}.",
-            }
-        )
-        existing.add(topic_name.lower())
 
 
 def generate_roadmap_with_ai(topic, context_text=None):
@@ -290,7 +373,7 @@ Follow these instructions strictly:
 3. Remove duplicate concepts (ensure all concept names are unique and distinct).
 4. Build prerequisite relationships between these concepts:
    - Identify which concepts must be studied BEFORE other concepts.
-   - Map these relationships by listing them as prerequisites (concepts needed before learning the topic) or next_topics (concepts to learn after mastering the current topic).
+   - Map these relationships by listing them as prerequisites or next_topics.
 5. Ignore any headers, page numbers, footers, captions, or references.
 6. Store only meaningful learning concepts (real educational topics, domain-specific terminology). Do not include generic verbs, adjectives, pronouns, or common words.
 7. Set the overall main concept of the document as the main "topic".
@@ -366,16 +449,20 @@ Rules:
         response_text, error = safe_groq_generate(ROADMAP_SYSTEM_PROMPT, user_prompt)
 
     if error:
-        print(f"Roadmap generation failed for '{topic}': {error}")
+        logger.error(f"[AI RESPONSE] Roadmap generation failed for '{topic}': {error}")
         return fallback_roadmap(topic)
+
+    logger.info(f"[AI RESPONSE] Roadmap generated for '{topic}'. Parsing JSON...")
 
     try:
+        logger.info(f"[JSON PARSING] Attempting to parse JSON for topic '{topic}'...")
         data = json.loads(clean_json_object(response_text))
+        logger.info(f"[JSON PARSING] Success parsing JSON for topic '{topic}'.")
     except (json.JSONDecodeError, TypeError) as exc:
-        print(f"Roadmap generation failed for '{topic}': invalid JSON from Groq: {exc}")
+        logger.error(f"[JSON PARSING] Failed parsing JSON for topic '{topic}': {exc}")
         return fallback_roadmap(topic)
 
-    return validate_roadmap(data, topic, is_from_pdf=bool(context_text))
+    return validate_roadmap(data, topic, is_from_pdf=bool(context_text), context_text=context_text)
 
 
 def format_explanation(data):
@@ -412,18 +499,20 @@ def format_explanation(data):
 
 
 def get_or_create_roadmap(topic, context_text=None, force_refresh=False):
-    clean_topic = normalize_topic_name(topic)
+    audit_tracker.reset()
 
-    # Always generate a new roadmap when context_text is provided (e.g., from PDF upload)
+    clean_topic = canonicalize_concept_name(topic)
+
     if not force_refresh and not context_text:
         cached = fetch_roadmap_from_neo4j(clean_topic)
         if cached:
             cached = validate_roadmap(cached, clean_topic)
             cached["cached"] = True
+            audit_tracker.print_report()
             return cached
 
     roadmap = generate_roadmap_with_ai(clean_topic, context_text)
     save_roadmap_to_neo4j(roadmap)
     roadmap["cached"] = False
+    audit_tracker.print_report()
     return roadmap
-

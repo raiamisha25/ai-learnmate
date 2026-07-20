@@ -4,7 +4,13 @@ import re
 import networkx as nx
 
 from services.groq_service import safe_groq_generate
-from utils.topic_validator import validate_concepts
+from utils.topic_validator import (
+    canonicalize_concept_name,
+    is_valid_relationship,
+    is_valid_topic,
+    logger,
+    validate_concepts,
+)
 
 
 STOP_WORDS = {
@@ -25,12 +31,14 @@ Only include domain-specific educational concepts, not random English words.
 
 ALLOWED_RELATIONSHIPS = {
     "PREREQUISITE",
+    "PREREQUISITE_OF",
     "NEXT_TOPIC",
     "PART_OF",
     "USES",
     "APPLICATION_OF",
     "COMPARES_WITH",
     "RELATED_TO",
+    "RELATED_TOPIC",
 }
 
 RELATIONSHIP_CLASSIFICATION_SYSTEM_PROMPT = """
@@ -48,7 +56,7 @@ def clean_json_object(text):
 
 
 def clean_concept_name(text):
-    return " ".join(word.capitalize() for word in (text or "").split())
+    return canonicalize_concept_name(text)
 
 
 def is_meaningful_phrase(words):
@@ -102,13 +110,17 @@ Study material:
     )
 
     if error:
-        print(f"AI concept extraction failed: {error}")
+        logger.error(f"[AI RESPONSE] Concept extraction failed: {error}")
         return []
 
+    logger.info("[AI RESPONSE] Concept extraction raw response received.")
+
     try:
+        logger.info("[JSON PARSING] Attempting to parse JSON for AI concept extraction...")
         data = json.loads(clean_json_object(response_text))
+        logger.info("[JSON PARSING] Success parsing JSON for AI concept extraction.")
     except (json.JSONDecodeError, TypeError) as exc:
-        print(f"AI concept extraction returned invalid JSON: {exc}")
+        logger.error(f"[JSON PARSING] Failed parsing JSON for AI concept extraction: {exc}")
         return []
 
     concepts = data.get("concepts", []) if isinstance(data, dict) else []
@@ -147,7 +159,7 @@ def extract_fallback_concepts(summary):
     concepts = []
 
     for phrase, _count in sorted_phrases:
-        concept = clean_concept_name(phrase)
+        concept = canonicalize_concept_name(phrase)
 
         if concept not in concepts:
             concepts.append(concept)
@@ -182,18 +194,17 @@ Allowed relationship labels:
 Return ONLY JSON in this exact shape:
 {{
   "relationships": [
-    {{"subject": "Binary Tree", "relation": "PREREQUISITE", "object": "Tree"}},
-    {{"subject": "Heap", "relation": "RELATED_TO", "object": "Priority Queue"}},
-    {{"subject": "Random Forest", "relation": "PREREQUISITE", "object": "Decision Tree"}}
+    {{"subject": "Binary Tree", "relation": "PREREQUISITE", "object": "Tree", "why": "Tree provides foundational structure."}},
+    {{"subject": "Heap", "relation": "RELATED_TO", "object": "Priority Queue", "why": "Heaps efficiently implement priority queues."}}
   ]
 }}
 
 Rules:
 - Use only the concepts listed below as subject and object values.
 - Store the relation as exactly one of the allowed labels.
+- Include a non-trivial 'why' explanation (>10 characters).
 - Do not invent relationship labels.
 - Do not create relationships just because concepts appear next to each other.
-- Include only relationships that are supported by the study material or by standard educational dependency.
 - If no meaningful relationship exists, return {{"relationships":[]}}.
 
 Concepts:
@@ -209,20 +220,23 @@ Study material:
     )
 
     if error:
-        print(f"AI relationship classification failed: {error}")
+        logger.error(f"[AI RESPONSE] Relationship classification failed: {error}")
         return []
 
+    logger.info("[AI RESPONSE] Relationship classification raw response received.")
+
     try:
+        logger.info("[JSON PARSING] Attempting to parse JSON for AI relationship classification...")
         data = json.loads(clean_json_object(response_text))
+        logger.info("[JSON PARSING] Success parsing JSON for AI relationship classification.")
     except (json.JSONDecodeError, TypeError) as exc:
-        print(f"AI relationship classification returned invalid JSON: {exc}")
+        logger.error(f"[JSON PARSING] Failed parsing JSON for AI relationship classification: {exc}")
         return []
 
     relationships = data.get("relationships", []) if isinstance(data, dict) else []
     if not isinstance(relationships, list):
         return []
 
-    concept_lookup = {concept.lower(): concept for concept in concepts}
     clean_relationships = []
     seen_relationships = set()
 
@@ -230,22 +244,28 @@ Study material:
         if not isinstance(relationship, dict):
             continue
 
-        subject = concept_lookup.get(str(relationship.get("subject", "")).strip().lower())
-        object_name = concept_lookup.get(str(relationship.get("object", "")).strip().lower())
+        raw_subj = str(relationship.get("subject", "")).strip()
+        raw_obj = str(relationship.get("object", "")).strip()
         relation = str(relationship.get("relation", "")).strip().upper()
+        why = str(relationship.get("why", "")).strip()
 
-        if not subject or not object_name or subject == object_name:
-            continue
-        if relation not in ALLOWED_RELATIONSHIPS:
+        subject = canonicalize_concept_name(raw_subj)
+        object_name = canonicalize_concept_name(raw_obj)
+
+        if not why or len(why) < 10:
+            why = f"{subject} relates to {object_name} in learning order."
+
+        is_rel_valid, rel_reason = is_valid_relationship(subject, object_name, relation, why, seen_relationships)
+        if not is_rel_valid:
+            logger.info(f"[RELATIONSHIP VALIDATION] Edge '{subject}' -[{relation}]-> '{object_name}' rejected: {rel_reason}")
             continue
 
-        relationship_key = (subject, relation, object_name)
-        if relationship_key in seen_relationships:
-            continue
-
+        relationship_key = (subject.lower(), relation, object_name.lower())
         seen_relationships.add(relationship_key)
+
+        logger.info(f"[RELATIONSHIP VALIDATION] Validated edge: '{subject}' -[{relation}]-> '{object_name}'")
         clean_relationships.append(
-            {"subject": subject, "relation": relation, "object": object_name}
+            {"subject": subject, "relation": relation, "object": object_name, "why": why}
         )
 
     return clean_relationships
@@ -261,7 +281,7 @@ def build_knowledge_graph(summary):
     edges = classify_relationships_with_ai(summary, concepts)
 
     for edge in edges:
-        graph.add_edge(edge["subject"], edge["object"], relation=edge["relation"])
+        graph.add_edge(edge["subject"], edge["object"], relation=edge["relation"], why=edge.get("why", ""))
 
     triples = [
         (edge["subject"], edge["relation"], edge["object"])
@@ -279,4 +299,3 @@ def build_knowledge_graph(summary):
 def infer_main_topic(text):
     concepts = extract_key_concepts(text)
     return concepts[0] if concepts else "Uploaded PDF"
-

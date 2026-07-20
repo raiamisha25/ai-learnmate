@@ -2,6 +2,7 @@ from models.state import latest_quiz, latest_result
 from services.groq_service import safe_groq_generate
 from services.quiz_service import generate_quiz
 from services.roadmap_service import get_or_create_roadmap
+from utils.topic_validator import logger
 
 
 def infer_topic_from_text(text):
@@ -17,7 +18,7 @@ Text:
     response_text, error = safe_groq_generate(system_prompt, user_prompt, max_tokens=80)
 
     if error:
-        print(f"Main topic inference failed: {error}")
+        logger.error(f"[AI RESPONSE] Main topic inference failed: {error}")
         return "Uploaded PDF"
 
     return (response_text or "Uploaded PDF").strip().strip('"')
@@ -27,7 +28,7 @@ def generate_topic_plan(topic, context_text=None):
     try:
         return get_or_create_roadmap(topic, context_text)
     except Exception as exc:
-        print(f"Topic plan generation failed for '{topic}': {exc}")
+        logger.error(f"[VALIDATION] Topic plan generation failed for '{topic}': {exc}")
         return get_or_create_roadmap(topic, context_text, force_refresh=True)
 
 

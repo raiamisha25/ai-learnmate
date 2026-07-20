@@ -115,11 +115,15 @@ Return JSON only:
         return fallback_quiz(topic, difficulty, question_count)
 
     try:
+        from utils.topic_validator import logger
+        logger.info(f"[JSON PARSING] Attempting to parse JSON for quiz on topic '{topic}'...")
         questions = json.loads(clean_json_text(response_text or "[]"))
         if isinstance(questions, dict):
             questions = questions.get("questions", [])
+        logger.info(f"[JSON PARSING] Success parsing JSON for quiz on topic '{topic}'.")
     except (json.JSONDecodeError, TypeError, AttributeError) as exc:
-        print(f"Quiz generation failed: could not parse Groq JSON response: {exc}")
+        from utils.topic_validator import logger
+        logger.info(f"[JSON PARSING] Failed parsing JSON for quiz on topic '{topic}': {exc}")
         return fallback_quiz(topic, difficulty, question_count)
 
     valid_questions = []

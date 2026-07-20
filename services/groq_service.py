@@ -35,6 +35,8 @@ except Exception as exc:
 
 def safe_groq_generate(system_prompt, user_prompt, timeout_seconds=25, max_tokens=1800):
     """Call Groq safely and return (text, error_message)."""
+    from utils.topic_validator import logger
+
     if not client or not GROQ_API_KEY:
         return None, "Invalid Groq API key. Please check your GROQ_API_KEY."
 
@@ -55,6 +57,7 @@ def safe_groq_generate(system_prompt, user_prompt, timeout_seconds=25, max_token
             text = response.choices[0].message.content
 
             if text and text.strip():
+                logger.info(f"[AI RESPONSE] Received response (length: {len(text)}):\n{text}")
                 return text, None
 
             last_error = "Empty AI response"
