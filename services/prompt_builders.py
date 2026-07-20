@@ -221,47 +221,48 @@ Rules:
 def build_topic_lecture_prompt(topic):
     system_prompt = """
 You are an award-winning university professor teaching a first-year student.
-Assume the student is studying the topic for the first time.
-Be beginner-friendly, conversational, and educational rather than encyclopedic.
-Introduce ideas gradually from simple intuition to technical detail. Avoid defining concepts with unfamiliar terminology without explaining those terms first.
-Return ONLY valid JSON containing all 14 required educational sections (approx 600-1000 total words).
+Teach the requested topic thoroughly, step by step, using clear analogies and practical code walkthroughs.
+Do NOT use generic filler sentences (e.g., avoid "X is a fundamental educational concept").
+Return ONLY valid JSON.
 """
     user_prompt = f"""
-Deliver a comprehensive, beginner-friendly university lecture for the topic: {topic}
+Deliver a comprehensive university lecture for: {topic}
 
-Follow this exact 14-section structure in your JSON output:
-1. Simple Definition: 1-2 simple paragraphs in everyday language.
-2. Why Do We Need It?: What real-world problem this solves; motivate the learner.
-3. Intuition: Build a mental model using simple ideas.
-4. Real-Life Analogy: Relate to something familiar (e.g. Linked List -> Train coaches, Stack -> Plates, Queue -> Standing in line, Tree -> Family tree, Graph -> Cities and roads, Hash Table -> Dictionary).
-5. Step-by-Step Working: Detailed numbered explanation of how it works without skipping steps.
-6. Visual Thinking: Describe what the learner should picture (e.g. "Imagine five boxes connected by arrows...").
-7. Simple Example: Walk through one complete example slowly before code.
-8. Code Example: Clean code with line-by-line explanation.
-9. Advantages: Why programmers choose this concept.
-10. Limitations: When this concept is NOT a good choice.
-11. Common Beginner Mistakes: Frequent student misconceptions.
-12. Interview Perspective: Exam and technical interview questions with key answer points.
-13. Summary: Short recap.
-14. What To Learn Next: Educationally relevant successor topics.
+Teach this concept assuming the learner is studying it for the first time.
+Follow this 14-section structure in your JSON output:
+
+1. definition: 1-2 clear, simple paragraphs explaining {topic} in plain everyday language.
+2. why_needed: Explain the exact real-world problem {topic} solves and why engineers/scientists use it.
+3. intuition: Provide an intuitive mental model to help the learner picture the core idea.
+4. analogy: Provide a vivid, real-life analogy (e.g. Linked List -> Train coaches connected together; Stack -> Stack of plates; Queue -> People standing in line; Tree -> Family tree).
+5. steps: Detailed, step-by-step numbered walkthrough of how {topic} works under the hood.
+6. visual: Describe what the learner should picture (e.g. "Imagine five memory boxes connected by pointers...").
+7. example: A complete conceptual example walkthrough before code.
+8. code: Clean code implementation with line-by-line comments explaining key logic.
+9. advantages: Key benefits and strengths.
+10. limitations: Trade-offs and drawbacks.
+11. mistakes: Common beginner misconceptions to avoid.
+12. interview: Popular university exam / technical interview questions with key answer points.
+13. summary: Short recap of key takeaways.
+14. next_steps: Recommended successor topics to study next.
 
 Return ONLY JSON in this exact shape:
 {{
   "topic": "{topic}",
-  "definition": "1-2 simple paragraphs explaining {topic} in everyday language.",
-  "why_it_matters": "Clear explanation of the real-world problem {topic} solves.",
-  "intuition": "Intuitive mental model building student understanding.",
-  "real_world_analogy": "Vivid, memorable real-life analogy.",
-  "step_by_step_explanation": "1. First step...\\n2. Second step...\\n3. Third step...",
-  "visual_thinking": "Visual description guiding student imagination.",
-  "simple_example": "Step-by-step conceptual walkthrough before code.",
-  "code_example": "Commented code block with line-by-line explanation.",
-  "advantages": "Key strengths and benefits.",
-  "limitations": "Trade-offs and drawbacks.",
-  "common_mistakes": "Frequent beginner mistakes to avoid.",
-  "interview_perspective": "Key exam/interview questions and answer points.",
+  "definition": "Clear, beginner-friendly 1-2 paragraph definition in plain language.",
+  "why_needed": "Real-world problem solved by {topic} and practical engineering motivation.",
+  "intuition": "Intuitive mental model for building conceptual understanding.",
+  "analogy": "Vivid real-life analogy relating {topic} to familiar objects.",
+  "steps": "1. First step...\\n2. Second step...\\n3. Third step...",
+  "visual": "Visual description guiding mental imagination.",
+  "example": "Detailed conceptual walkthrough step by step.",
+  "code": "Clean, commented code block with line-by-line explanations.",
+  "advantages": "Main strengths and reasons programmers use {topic}.",
+  "limitations": "Trade-offs and situations where {topic} is not ideal.",
+  "mistakes": "Frequent student mistakes and anti-patterns.",
+  "interview": "Exam and interview questions with core answer points.",
   "summary": "Short recap of key takeaways.",
-  "what_to_learn_next": "Suggested successor topics to study next."
+  "next_steps": "Logical successor topics to learn next."
 }}
 """
     return system_prompt, user_prompt

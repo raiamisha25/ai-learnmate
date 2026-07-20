@@ -8,6 +8,7 @@ Responsible ONLY for orchestrating the learning workflow:
 """
 
 import json
+import re
 
 from models.state import latest_quiz, latest_result
 from services.groq_service import safe_groq_generate
@@ -28,7 +29,32 @@ def clean_json_text(text):
         text = text.replace("```json", "").replace("```", "").strip()
     start = text.find("{")
     end = text.rfind("}")
-    return text[start : end + 1] if start != -1 and end != -1 else text
+    if start != -1 and end != -1:
+        text = text[start : end + 1]
+    # Handle common unescaped string issue in LLM code blocks
+    return text.replace("\t", "    ")
+
+
+def try_extract_lecture_keys(response_text):
+    """
+    Regex fallback extractor to salvage rich JSON section content if json.loads() fails due to syntax cutoffs.
+    """
+    extracted = {}
+    keys = [
+        "definition", "why_needed", "why_it_matters", "motivation",
+        "intuition", "analogy", "real_world_analogy",
+        "steps", "step_by_step_explanation", "visual", "visual_thinking",
+        "example", "simple_example", "code", "code_example",
+        "advantages", "limitations", "mistakes", "common_mistakes",
+        "interview", "interview_perspective", "summary", "next_steps"
+    ]
+    for key in keys:
+        pattern = rf'"{key}"\s*:\s*"([^"]+)"'
+        match = re.search(pattern, response_text, re.DOTALL)
+        if match:
+            extracted[key] = match.group(1).strip()
+
+    return extracted if len(extracted) >= 3 else None
 
 
 def get_or_create_topic_lecture(topic):
@@ -48,15 +74,21 @@ def get_or_create_topic_lecture(topic):
         LECTURE_CACHE[cache_key] = lecture_data
         return lecture_data
 
+    lecture_data = None
     try:
-        logger.info(f"[JSON PARSING] Parsing JSON for 14-section university professor lecture on '{clean_t}'...")
-        lecture_data = json.loads(clean_json_text(response_text))
+        logger.info(f"[JSON PARSING] Parsing JSON for university professor lecture on '{clean_t}'...")
+        cleaned = clean_json_text(response_text)
+        lecture_data = json.loads(cleaned)
         logger.info(f"[JSON PARSING] Success parsing lecture JSON for '{clean_t}'.")
     except (json.JSONDecodeError, TypeError) as exc:
-        logger.error(f"[JSON PARSING] Failed parsing lecture JSON for '{clean_t}': {exc}")
-        lecture_data = generate_fallback_lecture(clean_t)
-        LECTURE_CACHE[cache_key] = lecture_data
-        return lecture_data
+        logger.error(f"[JSON PARSING] Standard JSON parsing failed for '{clean_t}': {exc}. Attempting regex recovery...")
+        recovered = try_extract_lecture_keys(response_text)
+        if recovered:
+            logger.info(f"[JSON PARSING] Recovered {len(recovered)} key sections via regex for '{clean_t}'.")
+            lecture_data = recovered
+        else:
+            logger.error(f"[JSON PARSING] Could not recover lecture text for '{clean_t}'. Using dynamic educational fallback.")
+            lecture_data = generate_fallback_lecture(clean_t)
 
     formatted_explanation = format_rich_lecture_explanation(lecture_data)
     lecture_data["explanation"] = formatted_explanation
@@ -67,43 +99,138 @@ def get_or_create_topic_lecture(topic):
 
 def generate_fallback_lecture(topic):
     clean_t = canonicalize_concept_name(topic)
+    
+    definition_text = (
+        f"**{clean_t}** is an essential data and computational structure designed to organize, manage, and process information efficiently.\n\n"
+        f"At its core, {clean_t} establishes clear rules for how data items relate to one another in memory and how operations like searching, insertion, and deletion are executed."
+    )
+    why_text = (
+        f"Without **{clean_t}**, software applications would struggle with high computational latency, unorganized data storage, and poor memory utilization.\n\n"
+        f"Engineers choose {clean_t} when building production systems to achieve predictable execution time and scalable memory architecture."
+    )
+    intuition_text = (
+        f"To build a mental model of **{clean_t}**, think of it as a specialized physical workspace where every item has a specific place and retrieval rule.\n\n"
+        f"Rather than searching randomly through unsorted items, {clean_t} provides a structured path directly to the needed resource."
+    )
+    analogy_text = (
+        f"Using **{clean_t}** is like using a well-organized index in a library or train coaches connected sequentially.\n\n"
+        f"Each component links predictably to the next, allowing you to traverse or access items without getting lost."
+    )
+    steps_text = (
+        f"1. **Initialization**: Memory space or reference pointers are allocated for {clean_t}.\n"
+        f"2. **Insertion & Lookup**: New elements are placed following the structure's positional rules (e.g. key hashing, node links, or index offsets).\n"
+        f"3. **Traversal & Processing**: Algorithms iterate through elements systematically to inspect or update data.\n"
+        f"4. **Deletion & Cleanup**: Removed items are decoupled cleanly to avoid memory leaks."
+    )
+    visual_text = (
+        f"Imagine a series of labeled boxes placed in order on a shelf.\n\n"
+        f"Each box contains data and an arrow pointing to where the next relevant box is located in memory."
+    )
+    example_text = (
+        f"Consider storing a sequence of 5 elements using {clean_t}.\n\n"
+        f"When inserting a new element, {clean_t} updates internal references or indices in place, preserving structural integrity."
+    )
+    code_text = (
+        f"// Conceptual implementation of {clean_t}\n"
+        f"class {clean_t.replace(' ', '')}Node {{\n"
+        f"    constructor(value) {{\n"
+        f"        this.value = value;\n"
+        f"        this.next = null;\n"
+        f"    }}\n"
+        f"}}\n\n"
+        f"// Usage Example:\n"
+        f"const node1 = new {clean_t.replace(' ', '')}Node('Data A');\n"
+        f"const node2 = new {clean_t.replace(' ', '')}Node('Data B');\n"
+        f"node1.next = node2; // Connect nodes"
+    )
+    advantages_text = (
+        f"- **Predictable Performance**: Optimizes runtime for frequent operations.\n"
+        f"- **Dynamic Memory Allocation**: Adapts efficiently to changing data sizes.\n"
+        f"- **Modularity**: Simplifies complex system architecture into reusable operations."
+    )
+    limitations_text = (
+        f"- **Memory Overhead**: Requires extra pointer/metadata storage per element.\n"
+        f"- **Access Trade-offs**: Random access may require O(N) traversal compared to static arrays."
+    )
+    mistakes_text = (
+        f"- **Null Pointer Errors**: Forgetting to check if references exist before accessing properties.\n"
+        f"- **Off-by-One Errors**: Miscalculating boundary conditions during loop iteration."
+    )
+    interview_text = (
+        f"**Question**: Explain how {clean_t} works and state its time complexity for core operations.\n\n"
+        f"**Answer**: Describe the node/index structure, explain time complexity (e.g., O(1) vs O(N)), and compare it with alternative data structures."
+    )
+    summary_text = f"**{clean_t}** combines structured memory organization with efficient algorithms to solve core computer science problems."
+    next_text = f"Study advanced variations, balancing techniques, and real-world system applications of **{clean_t}**."
+
     fallback = {
         "topic": clean_t,
-        "definition": f"{clean_t} is a fundamental educational concept in computer science and engineering.",
-        "why_it_matters": f"Understanding {clean_t} solves key resource management and data organization challenges.",
-        "intuition": f"Think of {clean_t} as a building block that simplifies complex operations.",
-        "real_world_analogy": f"Using {clean_t} is like organizing tools in a labeled workshop drawer.",
-        "step_by_step_explanation": f"1. Initialize {clean_t}.\n2. Perform core operations.\n3. Clean up resources.",
-        "visual_thinking": f"Imagine structured nodes or boxes connected in sequence representing {clean_t}.",
-        "simple_example": f"Walking through a basic scenario using {clean_t} step by step.",
-        "code_example": f"// Simple demonstration of {clean_t}\n// Line 1: Initialize\n// Line 2: Execute",
-        "advantages": "Fast execution, modularity, and structured data handling.",
-        "limitations": "Initial setup overhead and memory constraints.",
-        "common_mistakes": "Ignoring edge cases or boundary conditions.",
-        "interview_perspective": f"Explain the core mechanism of {clean_t} and its time complexity.",
-        "summary": f"{clean_t} forms a critical academic and practical foundation.",
-        "what_to_learn_next": f"Explore advanced variations and applications of {clean_t}.",
+        "definition": definition_text,
+        "why_needed": why_text,
+        "why_it_matters": why_text,
+        "intuition": intuition_text,
+        "analogy": analogy_text,
+        "real_world_analogy": analogy_text,
+        "steps": steps_text,
+        "step_by_step_explanation": steps_text,
+        "visual": visual_text,
+        "visual_thinking": visual_text,
+        "example": example_text,
+        "simple_example": example_text,
+        "code": code_text,
+        "code_example": code_text,
+        "advantages": advantages_text,
+        "limitations": limitations_text,
+        "mistakes": mistakes_text,
+        "common_mistakes": mistakes_text,
+        "interview": interview_text,
+        "interview_perspective": interview_text,
+        "summary": summary_text,
+        "next_steps": next_text,
+        "what_to_learn_next": next_text,
     }
     fallback["explanation"] = format_rich_lecture_explanation(fallback)
     return fallback
 
 
 def format_rich_lecture_explanation(data):
+    def get_val(*keys):
+        for k in keys:
+            v = data.get(k)
+            if v and isinstance(v, str) and len(v.strip()) > 0:
+                return v.strip()
+        return ""
+
+    definition = get_val("definition", "summary", "overview")
+    why_needed = get_val("why_needed", "why_it_matters", "motivation", "problem_solved")
+    intuition = get_val("intuition", "mental_model", "core_idea")
+    analogy = get_val("analogy", "real_world_analogy", "real_life_analogy")
+    steps = get_val("steps", "step_by_step_explanation", "step_by_step", "working")
+    visual = get_val("visual", "visual_thinking", "visualization")
+    example = get_val("example", "simple_example", "examples", "walkthrough")
+    code = get_val("code", "code_example", "code_walkthrough")
+    advantages = get_val("advantages", "benefits", "strengths")
+    limitations = get_val("limitations", "drawbacks", "tradeoffs")
+    mistakes = get_val("mistakes", "common_mistakes", "student_mistakes")
+    interview = get_val("interview", "interview_perspective", "interview_questions", "exam_questions")
+    summary = get_val("summary", "revision_summary", "recap")
+    next_steps = get_val("next_steps", "what_to_learn_next", "learning_tips", "next_topics")
+
     sections = [
-        f"### 1. Simple Definition\n{data.get('definition', '')}",
-        f"### 2. Why Do We Need It?\n{data.get('why_it_matters') or data.get('motivation', '')}",
-        f"### 3. Intuition & Mental Model\n{data.get('intuition', '')}",
-        f"### 4. Real-Life Analogy\n{data.get('real_world_analogy', '')}",
-        f"### 5. Step-by-Step Working\n{data.get('step_by_step_explanation', '')}",
-        f"### 6. Visual Thinking\n{data.get('visual_thinking', '')}",
-        f"### 7. Simple Example\n{data.get('simple_example') or data.get('examples', '')}",
-        f"### 8. Code Example\n{data.get('code_example', '')}",
-        f"### 9. Key Advantages\n{data.get('advantages', '')}",
-        f"### 10. Limitations & Drawbacks\n{data.get('limitations', '')}",
-        f"### 11. Common Beginner Mistakes\n{data.get('common_mistakes', '')}",
-        f"### 12. Interview Perspective\n{data.get('interview_perspective') or data.get('interview_questions', '')}",
-        f"### 13. Summary & Recap\n{data.get('summary') or data.get('revision_summary', '')}",
-        f"### 14. What To Learn Next\n{data.get('what_to_learn_next') or data.get('learning_tips', '')}",
+        f"### 1. Simple Definition\n{definition}",
+        f"### 2. Why Do We Need It?\n{why_needed}",
+        f"### 3. Intuition & Mental Model\n{intuition}",
+        f"### 4. Real-Life Analogy\n{analogy}",
+        f"### 5. Step-by-Step Working\n{steps}",
+        f"### 6. Visual Thinking\n{visual}",
+        f"### 7. Simple Example\n{example}",
+        f"### 8. Code Example\n{code}",
+        f"### 9. Key Advantages\n{advantages}",
+        f"### 10. Limitations & Drawbacks\n{limitations}",
+        f"### 11. Common Beginner Mistakes\n{mistakes}",
+        f"### 12. Interview Perspective\n{interview}",
+        f"### 13. Summary & Recap\n{summary}",
+        f"### 14. What To Learn Next\n{next_steps}",
     ]
     return "\n\n".join(s for s in sections if len(s.split("\n", 1)[-1].strip()) > 0)
 
@@ -171,7 +298,7 @@ def process_input(topic=None, text=None):
     quiz_context = "\n".join(
         [
             lecture.get("explanation", ""),
-            lecture.get("real_world_analogy", ""),
+            lecture.get("analogy", "") or lecture.get("real_world_analogy", ""),
             "Prerequisites: " + ", ".join(item["topic"] for item in ranked_before),
             "Next topics: " + ", ".join(item["topic"] for item in ranked_after),
         ]
@@ -184,10 +311,10 @@ def process_input(topic=None, text=None):
     result = {
         "topic": roadmap["topic"],
         "summary": lecture.get("explanation"),
-        "analogy": lecture.get("real_world_analogy"),
+        "analogy": lecture.get("analogy") or lecture.get("real_world_analogy"),
         "definition": lecture.get("definition"),
-        "why_it_matters": lecture.get("motivation") or lecture.get("why_it_matters"),
-        "example": lecture.get("examples") or lecture.get("simple_example"),
+        "why_it_matters": lecture.get("why_needed") or lecture.get("why_it_matters") or lecture.get("motivation"),
+        "example": lecture.get("example") or lecture.get("simple_example") or lecture.get("code"),
         "difficulty": roadmap.get("difficulty"),
         "estimated_time": roadmap.get("estimated_study_time"),
         "before": ranked_before,
