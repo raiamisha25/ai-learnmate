@@ -120,6 +120,38 @@ CURATED_ROADMAPS = {
         "next_topics": [{"topic": "Deep Learning", "why": "Complex neural architectures."}],
         "related_topics": [{"topic": "Supervised Learning", "why": "Core ML paradigm."}],
     },
+    "Linked List": {
+        "topic": "Linked List",
+        "definition": "A Linked List is a linear data structure where elements are stored in nodes connected by pointers.",
+        "why_it_matters": "It allows efficient dynamic memory allocation and O(1) insertions and deletions.",
+        "example": "Like a treasure hunt where each clue leads to the location of the next clue.",
+        "explanation": "Definition: A Linked List stores data in dynamic nodes connected sequentially by reference pointers.",
+        "difficulty": "Beginner",
+        "estimated_study_time": "3-4 hours",
+        "foundation_topics": [{"topic": "Arrays", "why": "Contiguous memory storage fundamentals."}],
+        "beginner_topics": [{"topic": "Pointers", "why": "Memory address references."}],
+        "intermediate_topics": [{"topic": "Doubly Linked List", "why": "Bidirectional node traversal."}],
+        "advanced_topics": [{"topic": "Circular Linked List", "why": "Ring buffer memory structure."}],
+        "prerequisites": [{"topic": "Arrays", "why": "Array memory fundamentals."}, {"topic": "Pointers", "why": "Pointer references."}],
+        "next_topics": [{"topic": "Doubly Linked List", "why": "Two-way node pointer linkage."}, {"topic": "Circular Linked List", "why": "Tail points to head node."}, {"topic": "Skip List", "why": "Probabilistic search optimization."}],
+        "related_topics": [{"topic": "Stack", "why": "LIFO memory structure."}, {"topic": "Queue", "why": "FIFO memory structure."}],
+    },
+    "Computer Networks": {
+        "topic": "Computer Networks",
+        "definition": "Computer Networks connect computing devices to share resources and communicate via protocols.",
+        "why_it_matters": "It powers internet communication, cloud infrastructure, and distributed services.",
+        "example": "The global Internet routing data packets between clients and servers.",
+        "explanation": "Computer Networks analyze protocol stacks (OSI/TCP-IP), routing algorithms, and socket communications.",
+        "difficulty": "Intermediate",
+        "estimated_study_time": "10-15 hours",
+        "foundation_topics": [{"topic": "Computer Architecture", "why": "Hardware hardware interfaces."}],
+        "beginner_topics": [{"topic": "TCP/IP", "why": "Internet protocol suite."}],
+        "intermediate_topics": [{"topic": "Routing", "why": "Packet path selection."}],
+        "advanced_topics": [{"topic": "Switching", "why": "Data link frame forwarding."}],
+        "prerequisites": [{"topic": "Computer Architecture", "why": "Hardware communication fundamentals."}],
+        "next_topics": [{"topic": "TCP/IP", "why": "Core network protocol suite."}, {"topic": "Routing", "why": "Path determination algorithms."}, {"topic": "Switching", "why": "Frame switching architectures."}, {"topic": "Network Security", "why": "Cryptographic network protection."}],
+        "related_topics": [{"topic": "Network Security", "why": "Data encryption and firewalls."}],
+    },
 }
 
 
@@ -160,8 +192,11 @@ def fallback_roadmap(topic):
 def validate_roadmap(data, requested_topic, is_from_pdf=False, context_text=None):
     logger.info(f"[VALIDATION] Starting roadmap validation for topic '{requested_topic}'...")
 
-    raw_main_topic = data.get("topic") or requested_topic
-    main_topic = canonicalize_concept_name(raw_main_topic)
+    if requested_topic and is_valid_topic(canonicalize_concept_name(requested_topic)):
+        main_topic = canonicalize_concept_name(requested_topic)
+    else:
+        raw_main_topic = data.get("topic") or requested_topic
+        main_topic = canonicalize_concept_name(raw_main_topic)
 
     all_ai_topics = {main_topic.lower()}
     for key in ("prerequisites", "next_topics", "related_topics", "foundation_topics", "beginner_topics", "intermediate_topics", "advanced_topics"):

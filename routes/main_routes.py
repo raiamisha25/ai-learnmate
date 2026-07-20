@@ -217,7 +217,12 @@ def register_routes(app):
                     options=ambiguity["options"],
                 )
 
-            chosen_topic = ambiguity["options"][0] if ambiguity.get("options") else user_topic
+            chosen_option = ambiguity["options"][0] if ambiguity.get("options") else user_topic
+            if isinstance(chosen_option, dict):
+                chosen_topic = chosen_option.get("canonical") or chosen_option.get("label") or user_topic
+            else:
+                chosen_topic = chosen_option
+
             result = process_input(topic=chosen_topic)
             if g.get("user"):
                 save_study_plan(g.user["id"], result)

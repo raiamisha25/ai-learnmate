@@ -13,8 +13,18 @@
     <div class="option-grid">
       {% for option in options %}
         <form method="POST">
-          <input type="hidden" name="selected_topic" value="{{ option }}">
-          <button class="option-choice" type="submit">{{ option }}</button>
+          {% if option is mapping %}
+            <input type="hidden" name="selected_topic" value="{{ option.canonical }}">
+            <button class="option-choice" type="submit">
+              <strong>{{ option.label }}</strong>
+              {% if option.domain %}
+                <span class="muted">({{ option.domain }})</span>
+              {% endif %}
+            </button>
+          {% else %}
+            <input type="hidden" name="selected_topic" value="{{ option }}">
+            <button class="option-choice" type="submit">{{ option }}</button>
+          {% endif %}
         </form>
       {% endfor %}
     </div>
