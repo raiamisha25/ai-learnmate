@@ -1,6 +1,8 @@
 import json
 
 from services.groq_service import safe_groq_generate
+from services.prompt_builders import build_quiz_prompt
+from utils.topic_validator import logger
 
 
 QUESTION_COUNTS = {
@@ -9,7 +11,6 @@ QUESTION_COUNTS = {
     5: 30,
     10: 45,
 }
-
 
 LEVEL_RULES = {
     "easy": [
@@ -51,18 +52,20 @@ def fallback_quiz(topic, difficulty="easy", count=8):
             ],
             "answer": "To solve a specific learning or computing problem",
             "explanation": f"{topic} is best understood by learning what problem it solves.",
+            "cognitive_level": "Recall",
             "difficulty": difficulty,
         },
         {
-            "question": f"What is the best way to learn {topic}?",
+            "question": f"What is the best way to master {topic}?",
             "options": [
-                "Start with concepts, then practice examples",
+                "Start with core concepts, then practice hands-on examples",
                 "Memorize random definitions only",
                 "Skip prerequisites",
                 "Avoid quizzes",
             ],
-            "answer": "Start with concepts, then practice examples",
-            "explanation": "Strong learning comes from understanding and practice together.",
+            "answer": "Start with core concepts, then practice hands-on examples",
+            "explanation": "Strong learning comes from combining theoretical understanding with practical application.",
+            "cognitive_level": "Understanding",
             "difficulty": difficulty,
         },
     ]
@@ -81,29 +84,8 @@ def question_count_for_duration(duration_minutes):
 def generate_quiz(topic, context_text=None, difficulty="easy", duration_minutes=3):
     difficulty = (difficulty or "easy").lower()
     question_count = question_count_for_duration(duration_minutes)
-    system_prompt = """
-You create high-quality adaptive MCQ quizzes.
-Return JSON only. Every question must directly test the requested topic and difficulty.
-"""
-    user_prompt = f"""
-Generate {question_count} multiple choice questions for: {topic}
 
-Difficulty: {difficulty}
-
-Context:
-{(context_text or topic)[:5000]}
-
-Return JSON only:
-[
-  {{
-    "question": "...",
-    "options": ["A", "B", "C", "D"],
-    "answer": "exact correct option",
-    "explanation": "short beginner-friendly explanation",
-    "difficulty": "{difficulty}"
-  }}
-]
-"""
+    system_prompt, user_prompt = build_quiz_prompt(topic, difficulty, question_count)
     response_text, error = safe_groq_generate(
         system_prompt,
         user_prompt,
@@ -111,19 +93,17 @@ Return JSON only:
     )
 
     if error:
-        print(f"Quiz generation failed: {error}")
+        logger.error(f"[AI RESPONSE] Quiz generation failed for '{topic}': {error}")
         return fallback_quiz(topic, difficulty, question_count)
 
     try:
-        from utils.topic_validator import logger
         logger.info(f"[JSON PARSING] Attempting to parse JSON for quiz on topic '{topic}'...")
         questions = json.loads(clean_json_text(response_text or "[]"))
         if isinstance(questions, dict):
             questions = questions.get("questions", [])
         logger.info(f"[JSON PARSING] Success parsing JSON for quiz on topic '{topic}'.")
     except (json.JSONDecodeError, TypeError, AttributeError) as exc:
-        from utils.topic_validator import logger
-        logger.info(f"[JSON PARSING] Failed parsing JSON for quiz on topic '{topic}': {exc}")
+        logger.error(f"[JSON PARSING] Failed parsing JSON for quiz on topic '{topic}': {exc}")
         return fallback_quiz(topic, difficulty, question_count)
 
     valid_questions = []
@@ -132,7 +112,8 @@ Return JSON only:
         question = item.get("question")
         options = item.get("options", [])
         answer = item.get("answer")
-        explanation = item.get("explanation") or "Review this idea in the learning guide."
+        explanation = item.get("explanation") or f"Review key concepts of {topic}."
+        cognitive_level = item.get("cognitive_level") or "Understanding"
 
         if isinstance(answer, str) and answer.strip().upper() in ("A", "B", "C", "D"):
             answer_index = ord(answer.strip().upper()) - ord("A")
@@ -146,12 +127,13 @@ Return JSON only:
                     "options": options,
                     "answer": answer,
                     "explanation": explanation,
+                    "cognitive_level": cognitive_level,
                     "difficulty": difficulty,
                 }
             )
 
     if not valid_questions:
-        print("Quiz generation failed: Groq response did not contain valid MCQs.")
+        logger.info(f"[VALIDATION] Groq response did not contain valid MCQs for '{topic}'. Using fallback quiz.")
         return fallback_quiz(topic, difficulty, question_count)
 
     return valid_questions[:question_count]
@@ -170,9 +152,7 @@ def calculate_level(difficulty, accuracy):
 def generate_quiz_comments(topic, difficulty, score, level):
     system_prompt = """
 You write short, funny, family-friendly learning feedback.
-Return JSON only.
-Every value must be maximum 20 words.
-No stories. No paragraphs. Maximum 2 short lines.
+Return JSON only. Maximum 20 words per comment.
 """
     user_prompt = f"""
 Topic: {topic}
@@ -184,19 +164,13 @@ Return JSON only:
 {{
   "funny_comment": "one funny educational comment",
   "motivational_comment": "one encouraging sentence",
-  "topic_joke": "one topic-specific family-friendly joke"
+  "topic_joke": "one topic-specific joke"
 }}
-
-Rules:
-- Each comment must be playful, motivational, and topic-aware.
-- Maximum 20 words per comment.
-- No long paragraphs.
-- Emojis are optional.
 """
     response_text, error = safe_groq_generate(system_prompt, user_prompt, max_tokens=400)
 
     if error:
-        print(f"Quiz comment generation failed: {error}")
+        logger.error(f"[AI RESPONSE] Quiz comment generation failed: {error}")
         return {
             "funny_comment": f"{topic} is starting to respect you.",
             "motivational_comment": "Keep practicing. Every attempt sharpens the idea.",
@@ -211,7 +185,7 @@ Rules:
             "topic_joke": short_comment(comments.get("topic_joke")),
         }
     except (json.JSONDecodeError, TypeError) as exc:
-        print(f"Quiz comment generation failed: could not parse JSON: {exc}")
+        logger.error(f"[JSON PARSING] Failed parsing quiz comments: {exc}")
         return {
             "funny_comment": f"{topic} is beginning to fear your progress.",
             "motivational_comment": "Nice work. Keep the streak alive.",

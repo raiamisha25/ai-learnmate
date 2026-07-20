@@ -1,5 +1,18 @@
+"""
+neo4j_service.py
+
+Responsible ONLY for:
+- Cypher queries
+- Graph retrieval
+- Graph insertion (MERGE)
+- Graph traversal
+- Persistence
+
+Educational ranking, recommendation scoring, and explanation generation
+are delegated to recommendation_service.py.
+"""
+
 import os
-import re
 
 from dotenv import load_dotenv
 from neo4j import GraphDatabase
@@ -11,7 +24,6 @@ from utils.topic_validator import (
     is_valid_relationship,
     is_valid_topic,
     logger,
-    normalize_topic_name,
     validate_concepts,
 )
 
@@ -55,19 +67,18 @@ def clean_topic_list(topics):
     return sorted({canonicalize_concept_name(topic) for topic in topics if topic and is_valid_topic(topic)})
 
 
-def clean_concept_name_for_storage(name):
-    return canonicalize_concept_name(name)
-
-
 def relation_to_type(relation):
     allowed_types = {
         "PREREQUISITE",
         "PREREQUISITE_OF",
-        "NEXT_TOPIC",
-        "PART_OF",
+        "BUILDS_ON",
         "USES",
-        "APPLICATION_OF",
-        "COMPARES_WITH",
+        "IMPLEMENTS",
+        "PART_OF",
+        "EXTENDS",
+        "SPECIAL_CASE_OF",
+        "ALTERNATIVE_TO",
+        "NEXT_TOPIC",
         "RELATED_TO",
         "RELATED_TOPIC",
     }
@@ -133,11 +144,10 @@ def save_graph_to_neo4j(graph_data):
     try:
         with get_neo4j_driver() as driver:
             with driver.session() as session:
-                # Cleanup existing relationships for affected concept nodes
                 try:
                     session.run(
                         """
-                        MATCH (start:Concept)-[rel:PREREQUISITE|PREREQUISITE_OF|NEXT_TOPIC|PART_OF|USES|APPLICATION_OF|COMPARES_WITH|RELATED_TO|RELATED_TOPIC]->(end:Concept)
+                        MATCH (start:Concept)-[rel]->(end:Concept)
                         WHERE start.name IN $concept_names OR end.name IN $concept_names
                         DELETE rel
                         """,
@@ -146,7 +156,6 @@ def save_graph_to_neo4j(graph_data):
                 except Exception as exc:
                     logger.error(f"[NEO4J INSERTION] Failed to clean old relationships: {exc}")
 
-                # Insert nodes with fault tolerance per node
                 for node in nodes:
                     try:
                         session.run(
@@ -162,7 +171,6 @@ def save_graph_to_neo4j(graph_data):
                     except Exception as exc:
                         logger.error(f"[NEO4J INSERTION] Failed to merge concept node '{node['name']}': {exc}")
 
-                # Insert edges with fault tolerance per edge
                 for edge in edges:
                     try:
                         relation_type = edge["relation"]
@@ -184,7 +192,6 @@ def save_graph_to_neo4j(graph_data):
                     except Exception as exc:
                         logger.error(f"[NEO4J INSERTION] Failed to merge relationship '{edge['subject']}' -> '{edge['object']}': {exc}")
 
-                # Clean up orphans
                 try:
                     session.run(
                         """
@@ -217,6 +224,7 @@ def fetch_graph_from_neo4j():
                     RETURN subject.name AS subject,
                            coalesce(rel.label, type(rel)) AS relation,
                            object.name AS object,
+                           coalesce(rel.why, "") AS why,
                            subject.important AS subject_important,
                            object.important AS object_important
                     ORDER BY subject.name, object.name
@@ -231,6 +239,7 @@ def fetch_graph_from_neo4j():
                     subject = canonicalize_concept_name(record["subject"])
                     object_name = canonicalize_concept_name(record["object"])
                     relation = record["relation"] or "RELATED_TO"
+                    why = record["why"] or f"{subject} connects with {object_name}."
 
                     if not is_valid_topic(subject) or not is_valid_topic(object_name):
                         continue
@@ -244,7 +253,7 @@ def fetch_graph_from_neo4j():
                         "important": bool(record["object_important"]),
                     }
                     edges.append(
-                        {"subject": subject, "relation": relation, "object": object_name}
+                        {"subject": subject, "relation": relation, "object": object_name, "why": why}
                     )
                     triples.append((subject, relation, object_name))
 
@@ -270,95 +279,103 @@ def fetch_graph_from_neo4j():
         return knowledge_graph
 
 
-def build_local_topic_suggestions():
-    suggestions = {}
-
-    for edge in knowledge_graph["edges"]:
-        suggestions.setdefault(edge["subject"], {"before": [], "after": []})
-        suggestions.setdefault(edge["object"], {"before": [], "after": []})
-
-        if edge["relation"] in ("NEXT_TOPIC", "next topic"):
-            suggestions[edge["subject"]]["after"].append(edge["object"])
-            suggestions[edge["object"]]["before"].append(edge["subject"])
-
-    return {
-        topic: {
-            "before": clean_topic_list(items["before"]),
-            "after": clean_topic_list(items["after"]),
-        }
-        for topic, items in suggestions.items()
-        if items["before"] or items["after"]
-    }
-
-
-def fetch_topic_suggestions():
+def fetch_raw_suggestions_from_neo4j(topic=None):
+    """
+    Fetch raw graph relationships from Neo4j without executing educational ranking.
+    Returns list of dicts with subject, object, relation, and why.
+    """
     try:
         with get_neo4j_driver() as driver:
             with driver.session() as session:
-                records = session.run(
-                    """
-                    MATCH (topic:Concept)
-                    OPTIONAL MATCH (before:Concept)-[:NEXT_TOPIC]->(topic)
-                    OPTIONAL MATCH (topic)-[:NEXT_TOPIC]->(after:Concept)
-                    RETURN topic.name AS topic,
-                           collect(DISTINCT before.name) AS before_topics,
-                           collect(DISTINCT after.name) AS after_topics
-                    ORDER BY topic.name
-                    """
-                )
+                if topic:
+                    clean_t = canonicalize_concept_name(topic)
+                    records = session.run(
+                        """
+                        MATCH (t:Concept)
+                        WHERE toLower(t.name) = toLower($topic)
+                        OPTIONAL MATCH (before:Concept)-[r1]->(t)
+                        OPTIONAL MATCH (t)-[r2]->(after:Concept)
+                        RETURN t.name AS topic,
+                               collect(DISTINCT {topic: before.name, relation: coalesce(r1.label, type(r1)), why: r1.why}) AS before_items,
+                               collect(DISTINCT {topic: after.name, relation: coalesce(r2.label, type(r2)), why: r2.why}) AS after_items
+                        """,
+                        topic=clean_t,
+                    )
+                else:
+                    records = session.run(
+                        """
+                        MATCH (t:Concept)
+                        OPTIONAL MATCH (before:Concept)-[r1]->(t)
+                        OPTIONAL MATCH (t)-[r2]->(after:Concept)
+                        RETURN t.name AS topic,
+                               collect(DISTINCT {topic: before.name, relation: coalesce(r1.label, type(r1)), why: r1.why}) AS before_items,
+                               collect(DISTINCT {topic: after.name, relation: coalesce(r2.label, type(r2)), why: r2.why}) AS after_items
+                        ORDER BY t.name
+                        """
+                    )
 
-                suggestions = {}
-
+                results = []
                 for record in records:
                     t_name = canonicalize_concept_name(record["topic"])
                     if not is_valid_topic(t_name):
                         continue
 
-                    before_topics = clean_topic_list(record["before_topics"])
-                    after_topics = clean_topic_list(record["after_topics"])
+                    befores = [
+                        {"topic": canonicalize_concept_name(item["topic"]), "relation": item.get("relation") or "PREREQUISITE_OF", "why": item.get("why") or ""}
+                        for item in record["before_items"] or []
+                        if item.get("topic") and is_valid_topic(canonicalize_concept_name(item["topic"]))
+                    ]
+                    afters = [
+                        {"topic": canonicalize_concept_name(item["topic"]), "relation": item.get("relation") or "NEXT_TOPIC", "why": item.get("why") or ""}
+                        for item in record["after_items"] or []
+                        if item.get("topic") and is_valid_topic(canonicalize_concept_name(item["topic"]))
+                    ]
 
-                    if before_topics or after_topics:
-                        suggestions[t_name] = {
-                            "before": before_topics,
-                            "after": after_topics,
-                        }
+                    results.append({"topic": t_name, "before": befores, "after": afters})
 
-        return suggestions or build_local_topic_suggestions()
+                return results
     except Exception as exc:
-        logger.error(f"[NEO4J INSERTION] Could not fetch topic suggestions: {exc}")
-        return build_local_topic_suggestions()
+        logger.error(f"[NEO4J INSERTION] Could not fetch raw suggestions: {exc}")
+        return []
+
+
+def fetch_topic_suggestions():
+    raw_data = fetch_raw_suggestions_from_neo4j()
+    from services.recommendation_service import rank_recommendations
+
+    suggestions = {}
+    for item in raw_data:
+        topic_name = item["topic"]
+        candidates = item["before"] + item["after"]
+        ranked = rank_recommendations(candidates, topic_name, limit=5)
+
+        befores = [r["topic"] for r in ranked if r.get("matched_relationships", [""])[0] in ("PREREQUISITE", "PREREQUISITE_OF", "requires", "builds_on")]
+        afters = [r["topic"] for r in ranked if r["topic"] not in befores]
+
+        if befores or afters:
+            suggestions[topic_name] = {
+                "before": clean_topic_list(befores),
+                "after": clean_topic_list(afters),
+            }
+
+    return suggestions
 
 
 def fetch_suggestions_for_topic(topic):
     clean_t = canonicalize_concept_name(topic)
-    try:
-        with get_neo4j_driver() as driver:
-            with driver.session() as session:
-                result = session.run(
-                    """
-                    MATCH (t:Concept)
-                    WHERE toLower(t.name) = toLower($topic)
-
-                    OPTIONAL MATCH (before:Concept)-[:NEXT_TOPIC]->(t)
-                    OPTIONAL MATCH (t)-[:NEXT_TOPIC]->(after:Concept)
-
-                    RETURN
-                        collect(DISTINCT before.name) AS before_topics,
-                        collect(DISTINCT after.name) AS after_topics
-                    """,
-                    topic=clean_t,
-                )
-                record = result.single()
-
-        if not record:
-            return [], []
-
-        before = clean_topic_list(record["before_topics"])
-        after = clean_topic_list(record["after_topics"])
-        return before, after
-    except Exception as exc:
-        logger.error(f"[NEO4J INSERTION] Could not fetch suggestions for '{topic}': {exc}")
+    raw_data = fetch_raw_suggestions_from_neo4j(clean_t)
+    if not raw_data:
         return [], []
+
+    from services.recommendation_service import rank_recommendations
+    item = raw_data[0]
+    candidates = item["before"] + item["after"]
+    ranked = rank_recommendations(candidates, clean_t, limit=5)
+
+    befores = [r["topic"] for r in ranked if r.get("matched_relationships", [""])[0] in ("PREREQUISITE", "PREREQUISITE_OF", "requires", "builds_on")]
+    afters = [r["topic"] for r in ranked if r["topic"] not in befores]
+
+    return clean_topic_list(befores), clean_topic_list(afters)
 
 
 def save_topic_suggestions(topic, before, after):
@@ -379,7 +396,7 @@ def save_topic_suggestions(topic, before, after):
                             MERGE (before:Concept {name: $before_topic})
                             MERGE (topic:Concept {name: $topic})
                             MERGE (before)-[:NEXT_TOPIC]->(topic)
-                            MERGE (topic)-[:PREREQUISITE]->(before)
+                            MERGE (topic)-[:PREREQUISITE_OF]->(before)
                             MERGE (before)-[:RELATED_TO]->(topic)
                             """,
                             before_topic=before_topic,
@@ -397,7 +414,7 @@ def save_topic_suggestions(topic, before, after):
                             MERGE (topic:Concept {name: $topic})
                             MERGE (after:Concept {name: $after_topic})
                             MERGE (topic)-[:NEXT_TOPIC]->(after)
-                            MERGE (after)-[:PREREQUISITE]->(topic)
+                            MERGE (after)-[:PREREQUISITE_OF]->(topic)
                             MERGE (topic)-[:RELATED_TO]->(after)
                             """,
                             topic=clean_topic,
@@ -509,7 +526,6 @@ def save_roadmap_to_neo4j(roadmap):
     try:
         with driver as drv:
             with drv.session() as session:
-                # 1. Merge main concept node
                 try:
                     session.run(
                         """
@@ -537,7 +553,6 @@ def save_roadmap_to_neo4j(roadmap):
                 except Exception as exc:
                     logger.error(f"[NEO4J INSERTION] Failed to merge concept node '{roadmap['topic']}': {exc}")
 
-                # 2. Merge prerequisite relationships
                 for item in roadmap.get("prerequisites", []):
                     try:
                         pre_name = item["topic"]
@@ -555,11 +570,9 @@ def save_roadmap_to_neo4j(roadmap):
                         )
                         audit_tracker.neo4j_nodes += 1
                         audit_tracker.neo4j_relationships += 1
-                        logger.info(f"[NEO4J INSERTION] Merged prerequisite: '{pre_name}' -[PREREQUISITE_OF]-> '{roadmap['topic']}'")
                     except Exception as exc:
                         logger.error(f"[NEO4J INSERTION] Failed to merge prerequisite '{item.get('topic')}' -> '{roadmap['topic']}': {exc}")
 
-                # 3. Merge next topic relationships
                 for item in roadmap.get("next_topics", []):
                     try:
                         next_name = item["topic"]
@@ -577,11 +590,9 @@ def save_roadmap_to_neo4j(roadmap):
                         )
                         audit_tracker.neo4j_nodes += 1
                         audit_tracker.neo4j_relationships += 1
-                        logger.info(f"[NEO4J INSERTION] Merged next topic: '{roadmap['topic']}' -[NEXT_TOPIC]-> '{next_name}'")
                     except Exception as exc:
                         logger.error(f"[NEO4J INSERTION] Failed to merge next topic '{roadmap['topic']}' -> '{item.get('topic')}': {exc}")
 
-                # 4. Merge related topic relationships
                 for item in roadmap.get("related_topics", []):
                     try:
                         rel_name = item["topic"]
@@ -599,7 +610,6 @@ def save_roadmap_to_neo4j(roadmap):
                         )
                         audit_tracker.neo4j_nodes += 1
                         audit_tracker.neo4j_relationships += 1
-                        logger.info(f"[NEO4J INSERTION] Merged related topic: '{roadmap['topic']}' -[RELATED_TOPIC]-> '{rel_name}'")
                     except Exception as exc:
                         logger.error(f"[NEO4J INSERTION] Failed to merge related topic '{roadmap['topic']}' -> '{item.get('topic')}': {exc}")
     except Exception as exc:

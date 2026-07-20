@@ -4,6 +4,10 @@ import re
 import networkx as nx
 
 from services.groq_service import safe_groq_generate
+from services.prompt_builders import (
+    build_relationship_extraction_prompt,
+    build_topic_extraction_prompt,
+)
 from utils.topic_validator import (
     canonicalize_concept_name,
     is_valid_relationship,
@@ -23,40 +27,11 @@ STOP_WORDS = {
 }
 
 
-CONCEPT_EXTRACTION_SYSTEM_PROMPT = """
-You extract learning concepts from study material.
-Return ONLY valid JSON. Do not include markdown, prose, or comments.
-Only include domain-specific educational concepts, not random English words.
-"""
-
-ALLOWED_RELATIONSHIPS = {
-    "PREREQUISITE",
-    "PREREQUISITE_OF",
-    "NEXT_TOPIC",
-    "PART_OF",
-    "USES",
-    "APPLICATION_OF",
-    "COMPARES_WITH",
-    "RELATED_TO",
-    "RELATED_TOPIC",
-}
-
-RELATIONSHIP_CLASSIFICATION_SYSTEM_PROMPT = """
-You classify relationships between learning concepts.
-Return ONLY valid JSON. Do not include markdown, prose, or comments.
-Use only the allowed relationship labels.
-"""
-
-
 def clean_json_object(text):
     text = (text or "").strip()
     start = text.find("{")
     end = text.rfind("}")
     return text[start : end + 1] if start != -1 and end != -1 and end > start else ""
-
-
-def clean_concept_name(text):
-    return canonicalize_concept_name(text)
 
 
 def is_meaningful_phrase(words):
@@ -78,36 +53,8 @@ def add_phrases_from_chunk(chunk, phrase_counts):
 
 
 def extract_concepts_with_ai(text):
-    user_prompt = f"""
-Extract the important learning concepts from this study material.
-
-Return ONLY JSON in this exact shape:
-{{
-  "concepts": [
-    {{
-      "name": "ArrayList",
-      "definition": "short definition",
-      "importance": "why it matters",
-      "prerequisites": ["related prerequisite concept"],
-      "next_topics": ["meaningful next concept"]
-    }}
-  ]
-}}
-
-Rules:
-- Include only domain-specific concepts, such as ArrayList, Linked List, Binary Tree, Heap, Graph, DFS, Gradient Descent, Random Forest, Cell, Mitochondria, or DNA.
-- Do not include common English words, pronouns, UI words, verbs, adjectives, or sentence fragments.
-- Reject words like Learn, Your, Environment, Initial, Important, Example, Simple, Next, Topic, Step, Continue, Before, After, This, That, Understanding, Elements, and Size.
-- If there are no clear domain concepts, return {{"concepts":[]}}.
-
-Study material:
-{(text or "")[:7000]}
-"""
-    response_text, error = safe_groq_generate(
-        CONCEPT_EXTRACTION_SYSTEM_PROMPT,
-        user_prompt,
-        max_tokens=1200,
-    )
+    system_prompt, user_prompt = build_topic_extraction_prompt(text)
+    response_text, error = safe_groq_generate(system_prompt, user_prompt, max_tokens=1200)
 
     if error:
         logger.error(f"[AI RESPONSE] Concept extraction failed: {error}")
@@ -131,7 +78,6 @@ Study material:
 
 
 def extract_fallback_concepts(summary):
-    """Extract multi-word study topics such as Linked List or Binary Tree."""
     phrase_counts = {}
     sentences = re.split(r"[.!?;:\n]+", (summary or "").lower())
 
@@ -179,45 +125,8 @@ def classify_relationships_with_ai(summary, concepts):
     if len(concepts) < 2:
         return []
 
-    user_prompt = f"""
-Classify meaningful relationships between these learning concepts.
-
-Allowed relationship labels:
-- PREREQUISITE
-- NEXT_TOPIC
-- PART_OF
-- USES
-- APPLICATION_OF
-- COMPARES_WITH
-- RELATED_TO
-
-Return ONLY JSON in this exact shape:
-{{
-  "relationships": [
-    {{"subject": "Binary Tree", "relation": "PREREQUISITE", "object": "Tree", "why": "Tree provides foundational structure."}},
-    {{"subject": "Heap", "relation": "RELATED_TO", "object": "Priority Queue", "why": "Heaps efficiently implement priority queues."}}
-  ]
-}}
-
-Rules:
-- Use only the concepts listed below as subject and object values.
-- Store the relation as exactly one of the allowed labels.
-- Include a non-trivial 'why' explanation (>10 characters).
-- Do not invent relationship labels.
-- Do not create relationships just because concepts appear next to each other.
-- If no meaningful relationship exists, return {{"relationships":[]}}.
-
-Concepts:
-{json.dumps(concepts)}
-
-Study material:
-{(summary or "")[:7000]}
-"""
-    response_text, error = safe_groq_generate(
-        RELATIONSHIP_CLASSIFICATION_SYSTEM_PROMPT,
-        user_prompt,
-        max_tokens=1000,
-    )
+    system_prompt, user_prompt = build_relationship_extraction_prompt(summary, concepts)
+    response_text, error = safe_groq_generate(system_prompt, user_prompt, max_tokens=1000)
 
     if error:
         logger.error(f"[AI RESPONSE] Relationship classification failed: {error}")

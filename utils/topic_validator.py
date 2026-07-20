@@ -126,7 +126,8 @@ KNOWN_EDUCATIONAL_TOPICS = {
     "osmosis", "enzyme", "chromosome", "protein synthesis", "collections framework",
     "doubly linked list", "circular linked list", "call stack", "file systems",
     "hash function", "collision handling", "dictionary", "time complexity",
-    "data preprocessing", "pointers", "processes", "computer architecture",
+    "data preprocessing", "pointers", "pointer", "nodes", "node", "memory allocation",
+    "processes", "computer architecture", "tree", "trees", "matrix", "vectors",
 }
 
 TECHNICAL_SIGNALS = {
@@ -135,10 +136,11 @@ TECHNICAL_SIGNALS = {
     "database", "descent", "dna", "dynamic", "enzyme", "forest", "function",
     "graph", "hash", "heap", "learning", "linear", "linked", "list",
     "machine", "management", "memory", "mitochondria", "network", "neural",
-    "operating", "overfitting", "pointer", "programming", "queue",
-    "recursion", "regression", "scheduling", "search", "stack", "structure",
-    "supervised", "system", "tree", "traversal", "framework", "architecture",
-    "security", "cryptography", "polity", "geography", "economy", "ethics",
+    "operating", "overfitting", "pointer", "pointers", "node", "nodes",
+    "programming", "queue", "recursion", "regression", "scheduling", "search",
+    "stack", "structure", "supervised", "system", "tree", "traversal",
+    "framework", "architecture", "security", "cryptography", "polity",
+    "geography", "economy", "ethics",
 }
 
 SPECIAL_CASES = {
@@ -393,6 +395,7 @@ def get_topic_validation_details(topic, pdf_text=None, ai_topics=None, curated_t
             "heap", "stack", "queue", "graph", "cell", "mitochondria", "dna",
             "rna", "enzyme", "chromosome", "overfitting", "underfitting",
             "python", "java", "sql", "http", "api", "upsc", "gate", "cat",
+            "pointer", "pointers", "node", "nodes", "tree", "trees", "vector", "matrix",
         }
         if lower not in allowed_single:
             audit_tracker.rejected += 1
@@ -448,6 +451,7 @@ def is_valid_topic(topic, approved_topics=None):
             "heap", "stack", "queue", "graph", "cell", "mitochondria", "dna",
             "rna", "enzyme", "chromosome", "overfitting", "underfitting",
             "python", "java", "sql", "http", "api", "upsc", "gate", "cat",
+            "pointer", "pointers", "node", "nodes", "tree", "trees", "vector", "matrix",
         }
         if lower not in allowed_single:
             return False
@@ -476,8 +480,9 @@ def is_valid_relationship(src, dest, rel_type, why, existing_relationships=None)
         return False, "Self-relationship is not allowed"
 
     valid_types = {
-        "PREREQUISITE", "PREREQUISITE_OF", "NEXT_TOPIC", "PART_OF",
-        "USES", "APPLICATION_OF", "COMPARES_WITH", "RELATED_TO", "RELATED_TOPIC"
+        "PREREQUISITE", "PREREQUISITE_OF", "BUILDS_ON", "USES", "IMPLEMENTS",
+        "PART_OF", "EXTENDS", "SPECIAL_CASE_OF", "ALTERNATIVE_TO", "NEXT_TOPIC",
+        "RELATED_TO", "RELATED_TOPIC"
     }
     if not rel_type or rel_type.upper() not in valid_types:
         return False, f"Relationship type '{rel_type}' is invalid"
