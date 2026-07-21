@@ -79,6 +79,8 @@ COMMON_WORDS = {
     "most", "next", "other", "same", "simple", "size", "specified", "step",
     "such", "topic", "understanding", "used", "using", "value", "when",
     "where", "which", "while", "overview", "introduction", "summary", "conclusion",
+    "thing", "things", "concept", "concepts", "computer topic", "learning topic",
+    "educational concept", "main topic",
 }
 
 PRONOUNS = {
@@ -135,6 +137,7 @@ KNOWN_EDUCATIONAL_TOPICS = {
     "quantum mechanics", "quantum computing", "microservices architecture",
     "quick sort", "merge sort", "bubble sort", "insertion sort", "selection sort",
     "radix sort", "heap sort", "hash table", "hash tables", "hashing", "sorting algorithms",
+    "osi model", "osi", "tcp/ip", "ip",
 }
 
 TECHNICAL_SIGNALS = {
@@ -149,7 +152,7 @@ TECHNICAL_SIGNALS = {
     "framework", "architecture", "security", "cryptography", "polity",
     "geography", "economy", "ethics", "concurrency", "caching", "balancing",
     "design", "probability", "statistics", "evaluation", "physics", "mechanics",
-    "quantum", "fundamental", "fundamentals", "table", "tables",
+    "quantum", "fundamental", "fundamentals", "table", "tables", "osi", "tcp", "ip",
 }
 
 SPECIAL_CASES = {
@@ -174,6 +177,10 @@ SPECIAL_CASES = {
     "cpu": "CPU",
     "ram": "RAM",
     "os": "OS",
+    "osi model": "OSI Model",
+    "osi": "OSI",
+    "tcp/ip": "TCP/IP",
+    "ip": "IP",
     "programming fundamental": "Programming Fundamentals",
     "programming fundamentals": "Programming Fundamentals",
 }
@@ -498,9 +505,10 @@ def is_valid_relationship(src, dest, rel_type, why, existing_relationships=None)
         return False, "Self-relationship is not allowed"
 
     valid_types = {
-        "PREREQUISITE", "PREREQUISITE_OF", "BUILDS_ON", "USES", "IMPLEMENTS",
-        "PART_OF", "EXTENDS", "SPECIAL_CASE_OF", "ALTERNATIVE_TO", "NEXT_TOPIC",
-        "RELATED_TO", "RELATED_TOPIC"
+        "PREREQUISITE", "PREREQUISITE_OF", "REQUIRES", "REQUIRED_FOR", "FOUNDATION_OF", "USES",
+        "BUILDS_ON", "EXTENDS", "SPECIAL_CASE_OF", "ADVANCED_FORM_OF", "NEXT_TOPIC", "FOLLOWS",
+        "APPLICATION_OF", "USED_IN", "IMPLEMENTS",
+        "RELATED_TO", "RELATED_TOPIC", "SIMILAR_TO", "CONNECTED_TO", "ALTERNATIVE_TO", "PART_OF"
     }
     if not rel_type or rel_type.upper() not in valid_types:
         return False, f"Relationship type '{rel_type}' is invalid"
