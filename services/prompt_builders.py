@@ -220,49 +220,60 @@ Rules:
 
 def build_topic_lecture_prompt(topic):
     system_prompt = """
-You are an award-winning university professor teaching a first-year student.
-Teach the requested topic thoroughly, step by step, using clear analogies and practical code walkthroughs.
-Do NOT use generic filler sentences (e.g., avoid "X is a fundamental educational concept").
+You are an experienced, patient university professor specializing in beginner education.
+Teach the requested topic as a coherent, engaging classroom lecture for a first-year undergraduate student.
+
+Pedagogical Principles:
+- Conversational, encouraging tone: Guide the student smoothly from simple intuition toward deeper technical understanding.
+- Plain-language opening: Explain the concept in everyday language. Avoid jargon in the opening.
+- Explain WHY before HOW: Explain the real-world engineering problem that motivated the concept before diving into mechanics or code.
+- Build Intuition First: Use vivid mental models and relatable real-life analogies to make abstract ideas concrete before showing syntax or formulas.
+- Annotated Code Logic: When presenting code, explain line-by-line why statements exist and what happens in memory.
+- Intuitive Complexity Reasoning: Explain Time and Space Complexity by detailing the memory allocations and loop mechanics under the hood (e.g. why traversal takes O(N) or why hash lookup averages O(1)).
+- Student Misconceptions & Interview Expectations: Highlight common beginner mistakes and practical exam/interview questions naturally.
+- Zero generic filler: Avoid phrases like "X is a fundamental educational concept" or Wikipedia-style summaries. Every paragraph must contribute real learning value.
 Return ONLY valid JSON.
 """
     user_prompt = f"""
-Deliver a comprehensive university lecture for: {topic}
+Deliver a comprehensive, high-quality university lecture for: {topic}
 
 Teach this concept assuming the learner is studying it for the first time.
-Follow this 14-section structure in your JSON output:
+Structure your lecture around these educational dimensions (feel free to flow naturally between related ideas):
 
-1. definition: 1-2 clear, simple paragraphs explaining {topic} in plain everyday language.
-2. why_needed: Explain the exact real-world problem {topic} solves and why engineers/scientists use it.
-3. intuition: Provide an intuitive mental model to help the learner picture the core idea.
-4. analogy: Provide a vivid, real-life analogy (e.g. Linked List -> Train coaches connected together; Stack -> Stack of plates; Queue -> People standing in line; Tree -> Family tree).
-5. steps: Detailed, step-by-step numbered walkthrough of how {topic} works under the hood.
-6. visual: Describe what the learner should picture (e.g. "Imagine five memory boxes connected by pointers...").
-7. example: A complete conceptual example walkthrough before code.
-8. code: Clean code implementation with line-by-line comments explaining key logic.
-9. advantages: Key benefits and strengths.
-10. limitations: Trade-offs and drawbacks.
-11. mistakes: Common beginner misconceptions to avoid.
-12. interview: Popular university exam / technical interview questions with key answer points.
-13. summary: Short recap of key takeaways.
-14. next_steps: Recommended successor topics to study next.
+- definition: Clear, beginner-friendly 1-2 paragraph introduction in plain everyday language without opening jargon.
+- why_needed: The real-world problem {topic} solves and practical engineering motivation (explain WHY before HOW).
+- intuition: Intuitive mental model to help the learner picture the core concept.
+- analogy: A vivid, relatable real-life analogy simplifying the core idea.
+- steps: Detailed, step-by-step walkthrough of how {topic} works under the hood.
+- visual: Descriptive mental imagery guiding what the student should visualize in memory.
+- example: A clear conceptual example walkthrough before introducing code.
+- code: Clean code implementation with line-by-line comments explaining key logic and memory behavior.
+- complexity: Time and Space Complexity analysis explaining *WHY* those complexities occur based on loop iterations or memory space.
+- advantages: Key strengths and situations where {topic} performs exceptionally well.
+- limitations: Trade-offs, drawbacks, and scenarios where alternative approaches are better.
+- mistakes: Frequent beginner misconceptions, off-by-one errors, and implementation pitfalls.
+- interview: Core exam and technical interview questions with key answer points.
+- summary: Short, encouraging recap of key takeaways.
+- next_steps: Recommended successor topics and why they naturally build upon {topic}.
 
 Return ONLY JSON in this exact shape:
 {{
   "topic": "{topic}",
-  "definition": "Clear, beginner-friendly 1-2 paragraph definition in plain language.",
-  "why_needed": "Real-world problem solved by {topic} and practical engineering motivation.",
-  "intuition": "Intuitive mental model for building conceptual understanding.",
-  "analogy": "Vivid real-life analogy relating {topic} to familiar objects.",
+  "definition": "Clear, beginner-friendly 1-2 paragraph introduction in plain everyday language.",
+  "why_needed": "Real-world engineering problem solved by {topic} and practical motivation.",
+  "intuition": "Intuitive mental model building conceptual understanding.",
+  "analogy": "Vivid real-life analogy relating {topic} to familiar everyday objects.",
   "steps": "1. First step...\\n2. Second step...\\n3. Third step...",
   "visual": "Visual description guiding mental imagination.",
   "example": "Detailed conceptual walkthrough step by step.",
-  "code": "Clean, commented code block with line-by-line explanations.",
-  "advantages": "Main strengths and reasons programmers use {topic}.",
-  "limitations": "Trade-offs and situations where {topic} is not ideal.",
+  "code": "Clean, commented code block with line-by-line logic explanations.",
+  "complexity": "Time and Space Complexity breakdown explaining *WHY* those complexities occur.",
+  "advantages": "Main strengths and scenarios where {topic} performs best.",
+  "limitations": "Trade-offs and situations where alternative approaches are better.",
   "mistakes": "Frequent student mistakes and anti-patterns.",
-  "interview": "Exam and interview questions with core answer points.",
+  "interview": "Exam and interview questions with key answer points.",
   "summary": "Short recap of key takeaways.",
-  "next_steps": "Logical successor topics to learn next."
+  "next_steps": "Logical successor topics to study next."
 }}
 """
     return system_prompt, user_prompt

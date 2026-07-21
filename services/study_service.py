@@ -44,7 +44,7 @@ def try_extract_lecture_keys(response_text):
         "definition", "why_needed", "why_it_matters", "motivation",
         "intuition", "analogy", "real_world_analogy",
         "steps", "step_by_step_explanation", "visual", "visual_thinking",
-        "example", "simple_example", "code", "code_example",
+        "example", "simple_example", "code", "code_example", "complexity", "time_space_complexity",
         "advantages", "limitations", "mistakes", "common_mistakes",
         "interview", "interview_perspective", "summary", "next_steps"
     ]
@@ -93,7 +93,6 @@ def get_or_create_topic_lecture(topic):
     formatted_explanation = format_rich_lecture_explanation(lecture_data)
     lecture_data["explanation"] = formatted_explanation
     LECTURE_CACHE[cache_key] = lecture_data
-
     return lecture_data
 
 
@@ -209,6 +208,7 @@ def format_rich_lecture_explanation(data):
     visual = get_val("visual", "visual_thinking", "visualization")
     example = get_val("example", "simple_example", "examples", "walkthrough")
     code = get_val("code", "code_example", "code_walkthrough")
+    complexity = get_val("complexity", "time_space_complexity", "complexity_analysis")
     advantages = get_val("advantages", "benefits", "strengths")
     limitations = get_val("limitations", "drawbacks", "tradeoffs")
     mistakes = get_val("mistakes", "common_mistakes", "student_mistakes")
@@ -217,20 +217,21 @@ def format_rich_lecture_explanation(data):
     next_steps = get_val("next_steps", "what_to_learn_next", "learning_tips", "next_topics")
 
     sections = [
-        f"### 1. Simple Definition\n{definition}",
-        f"### 2. Why Do We Need It?\n{why_needed}",
-        f"### 3. Intuition & Mental Model\n{intuition}",
-        f"### 4. Real-Life Analogy\n{analogy}",
-        f"### 5. Step-by-Step Working\n{steps}",
-        f"### 6. Visual Thinking\n{visual}",
-        f"### 7. Simple Example\n{example}",
-        f"### 8. Code Example\n{code}",
-        f"### 9. Key Advantages\n{advantages}",
-        f"### 10. Limitations & Drawbacks\n{limitations}",
-        f"### 11. Common Beginner Mistakes\n{mistakes}",
-        f"### 12. Interview Perspective\n{interview}",
-        f"### 13. Summary & Recap\n{summary}",
-        f"### 14. What To Learn Next\n{next_steps}",
+        f"### Simple Definition\n{definition}",
+        f"### Why Do We Need It?\n{why_needed}",
+        f"### Intuition & Mental Model\n{intuition}",
+        f"### Real-Life Analogy\n{analogy}",
+        f"### Step-by-Step Working\n{steps}",
+        f"### Visual Representation\n{visual}",
+        f"### Practical Example\n{example}",
+        f"### Code Walkthrough & Line-by-Line Logic\n{code}",
+        f"### Time & Space Complexity Breakdown\n{complexity}",
+        f"### Key Strengths & Advantages\n{advantages}",
+        f"### Trade-offs & Limitations\n{limitations}",
+        f"### Common Beginner Mistakes\n{mistakes}",
+        f"### Exam & Interview Perspective\n{interview}",
+        f"### Summary & Key Takeaways\n{summary}",
+        f"### What To Learn Next\n{next_steps}",
     ]
     return "\n\n".join(s for s in sections if len(s.split("\n", 1)[-1].strip()) > 0)
 
