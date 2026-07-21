@@ -23,7 +23,7 @@ RECOMMENDATION_WEIGHTS = {
 }
 
 RELATION_SECTION_MAP = {
-    # Learn Before (Prerequisites)
+    # Learn Before (Prerequisites & Foundational Dependencies)
     "PREREQUISITE_OF": "before",
     "USES": "before",
     "REQUIRED_FOR": "before",
@@ -31,24 +31,26 @@ RELATION_SECTION_MAP = {
     "PREREQUISITE": "before",
     "REQUIRES": "before",
 
-    # Learn Next (Progressions)
+    # Learn Next (Progressions & Advanced Extensions)
     "BUILDS_ON": "after",
     "EXTENDS": "after",
     "SPECIAL_CASE_OF": "after",
-    "IMPLEMENTS": "after",
+    "ADVANCED_FORM_OF": "after",
     "NEXT_TOPIC": "after",
     "FOLLOWS": "after",
 
-    # Related Topics (Lateral / Alternatives / Components)
+    # Applications (Real-World Usage & Practical Implementations)
+    "APPLICATION_OF": "applications",
+    "USED_IN": "applications",
+    "IMPLEMENTS": "applications",
+
+    # Related Topics (Parallel Concepts & Lateral Connections)
     "RELATED_TO": "related",
     "SIMILAR_TO": "related",
+    "CONNECTED_TO": "related",
     "ALTERNATIVE_TO": "related",
     "PART_OF": "related",
     "RELATED_TOPIC": "related",
-
-    # Applications
-    "APPLICATION_OF": "applications",
-    "USED_IN": "applications",
 }
 
 
@@ -128,15 +130,12 @@ def generate_recommendation_explanation(candidate_name, target_topic, relation_t
     elif rel_type_upper in ("NEXT_TOPIC", "EXTENDS", "BUILDS_ON"):
         reason = f"{cand_clean} builds directly upon concepts introduced in {target_clean}."
         benefit = f"Studying {cand_clean} applies knowledge from {target_clean} to more complex problem domains."
-    elif rel_type_upper in ("USES", "IMPLEMENTS", "PART_OF"):
-        reason = f"{cand_clean} is a core structural component or implementation pattern used in {target_clean}."
-        benefit = f"Understanding {cand_clean} reveals how {target_clean} is constructed under the hood."
+    elif rel_type_upper in ("APPLICATION_OF", "USED_IN", "IMPLEMENTS"):
+        reason = f"{cand_clean} is a practical real-world implementation or system application of {target_clean}."
+        benefit = f"Exploring {cand_clean} demonstrates how {target_clean} is utilized in software production systems."
     elif rel_type_upper in ("SPECIAL_CASE_OF", "ALTERNATIVE_TO"):
         reason = f"{cand_clean} is a specialized form or alternative approach connected with {target_clean}."
         benefit = f"Learning {cand_clean} provides critical comparative insights alongside {target_clean}."
-    elif rel_type_upper in ("APPLICATION_OF", "USED_IN"):
-        reason = f"{cand_clean} is a practical real-world application of {target_clean}."
-        benefit = f"Exploring {cand_clean} demonstrates how {target_clean} is utilized in software production systems."
     else:
         reason = f"{cand_clean} shares complementary concepts with {target_clean}."
         benefit = f"Learning {cand_clean} broadens your domain understanding alongside {target_clean}."
@@ -205,7 +204,7 @@ def categorize_and_rank_recommendations(raw_candidates_by_source, target_topic, 
     - related (Related Topics)
     - applications (Applications)
 
-    Performs strict cross-section deduplication using section hierarchy:
+    Performs strict cross-section deduplication using section priority hierarchy:
     before > after > applications > related
     Ensures NO topic appears in multiple sections.
     """
@@ -237,6 +236,12 @@ def categorize_and_rank_recommendations(raw_candidates_by_source, target_topic, 
             section = get_educational_category(rel_type, fallback_direction=fallback_dir)
             rel_name = (rel_type or "RELATED_TO").upper()
 
+            # Diagnostic Logging: Educational Relationship Interpretation
+            logger.info(
+                f"[RELATION INTERPRETATION] Target: '{target_clean}' | Candidate: '{cand_name}' "
+                f"| Relationship: '{rel_name}' -> Category: '{section.upper()}' -> UI Section: '{section}'"
+            )
+
             is_prereq = section == "before"
             score, confidence = calculate_recommendation_score(
                 cand_name, target_clean, relation_type=rel_name, user_goal=user_goal
@@ -262,7 +267,8 @@ def categorize_and_rank_recommendations(raw_candidates_by_source, target_topic, 
     for sec in categorized_items:
         categorized_items[sec].sort(key=lambda x: x["score"], reverse=True)
 
-    # Global cross-section deduplication (hierarchy: before > after > applications > related)
+    # Global cross-section deduplication using strict section priority:
+    # before > after > applications > related
     assigned_topics = set()
     final_categorized = {}
 
