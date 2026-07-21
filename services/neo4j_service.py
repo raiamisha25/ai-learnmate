@@ -295,8 +295,8 @@ def fetch_raw_suggestions_from_neo4j(topic=None):
                         """
                         MATCH (t:Concept)
                         WHERE toLower(t.name) = toLower($topic)
-                        OPTIONAL MATCH path1 = (before:Concept)-[r1:PREREQUISITE_OF|PREREQUISITE*1..5]->(t)
-                        OPTIONAL MATCH path2 = (t)-[r2:NEXT_TOPIC|BUILDS_ON|EXTENDS|SPECIAL_CASE_OF|IMPLEMENTS|FOLLOWS|PREREQUISITE_OF*1..5]->(after:Concept)
+                        OPTIONAL MATCH path1 = (before:Concept)-[r1:PREREQUISITE_OF*1..5]->(t)
+                        OPTIONAL MATCH path2 = (t)-[r2:NEXT_TOPIC|RELATED_TOPIC*1..5]->(after:Concept)
                         WITH t,
                              collect(DISTINCT {
                                  topic: before.name,
@@ -316,8 +316,8 @@ def fetch_raw_suggestions_from_neo4j(topic=None):
                     records = session.run(
                         """
                         MATCH (t:Concept)
-                        OPTIONAL MATCH path1 = (before:Concept)-[r1:PREREQUISITE_OF|PREREQUISITE*1..5]->(t)
-                        OPTIONAL MATCH path2 = (t)-[r2:NEXT_TOPIC|BUILDS_ON|EXTENDS|SPECIAL_CASE_OF|IMPLEMENTS|FOLLOWS|PREREQUISITE_OF*1..5]->(after:Concept)
+                        OPTIONAL MATCH path1 = (before:Concept)-[r1:PREREQUISITE_OF*1..5]->(t)
+                        OPTIONAL MATCH path2 = (t)-[r2:NEXT_TOPIC|RELATED_TOPIC*1..5]->(after:Concept)
                         WITH t,
                              collect(DISTINCT {
                                  topic: before.name,
@@ -370,7 +370,7 @@ def fetch_prerequisite_chain_from_neo4j(topic, max_depth=5):
             with driver.session() as session:
                 result = session.run(
                     """
-                    MATCH path = (start:Concept)-[:PREREQUISITE_OF|PREREQUISITE*1..5]->(target:Concept)
+                    MATCH path = (start:Concept)-[:PREREQUISITE_OF*1..5]->(target:Concept)
                     WHERE toLower(target.name) = toLower($topic)
                     RETURN [node in nodes(path) | node.name] AS chain
                     LIMIT 15
@@ -509,7 +509,7 @@ def fetch_roadmap_from_neo4j(topic):
                     MATCH (topic:Concept)
                     WHERE toLower(topic.name) = toLower($topic)
                     OPTIONAL MATCH (pre:Concept)-[pre_rel:PREREQUISITE_OF]->(topic)
-                    OPTIONAL MATCH (topic)-[next_rel:NEXT_TOPIC|BUILDS_ON|EXTENDS|SPECIAL_CASE_OF|IMPLEMENTS|FOLLOWS]->(next:Concept)
+                    OPTIONAL MATCH (topic)-[next_rel:NEXT_TOPIC]->(next:Concept)
                     OPTIONAL MATCH (topic)-[related_rel:RELATED_TOPIC]->(related:Concept)
                     RETURN
                         collect(DISTINCT {topic: pre.name, why: pre_rel.why}) AS prerequisites,
