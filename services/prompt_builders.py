@@ -192,25 +192,24 @@ Context / Study Material:
 
 Return JSON ONLY in this exact shape:
 {{
-  "topic": "{topic}",
-  "estimated_study_time": "3-5 hours",
-  "difficulty": "Beginner | Intermediate | Advanced",
   "prerequisites": [
-    {{"topic": "Real Prerequisite Concept", "why": "Pedagogical dependency explanation"}}
+    "Real Prerequisite Concept 1",
+    "Real Prerequisite Concept 2"
   ],
   "next_topics": [
-    {{"topic": "Real Successor Concept", "why": "Logical successor explanation"}}
+    "Real Successor Concept 1",
+    "Real Successor Concept 2"
   ],
   "related_topics": [
-    {{"topic": "Real Related Concept", "why": "Cross-cutting or complementary domain relationship"}}
+    "Real Related Concept 1",
+    "Real Related Concept 2"
   ]
 }}
 
 Rules:
-1. Every item in 'prerequisites', 'next_topics', and 'related_topics' MUST be a real, distinct educational concept.
+1. Every item in 'prerequisites', 'next_topics', and 'related_topics' MUST be a real, distinct educational concept name (a flat string).
 2. NEVER produce template phrases like 'Basic {topic}', 'Applied {topic}', 'Intermediate {topic} Implementation', or 'Advanced {topic} Applications'.
 3. If no genuine distinct concept exists for a list, return [].
-4. Keep 'why' explanations concise (1-2 sentences).
 """
     return system_prompt, user_prompt
 

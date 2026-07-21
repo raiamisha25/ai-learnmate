@@ -161,7 +161,13 @@ def clean_json_object(text):
         text = text.replace("```json", "").replace("```", "").strip()
     start = text.find("{")
     end = text.rfind("}")
-    return text[start : end + 1] if start != -1 and end != -1 else text
+    if start != -1 and end != -1:
+        text = text[start : end + 1]
+    
+    # Sanitize control characters (U+0000 to U+001F) to prevent json decode crashes
+    import re
+    text = re.sub(r'[\x00-\x1f]', lambda m: f'\\u{ord(m.group(0)):04x}', text)
+    return text
 
 
 def fallback_roadmap(topic):
@@ -197,6 +203,12 @@ def validate_roadmap(data, requested_topic, is_from_pdf=False, context_text=None
     else:
         raw_main_topic = data.get("topic") or requested_topic
         main_topic = canonicalize_concept_name(raw_main_topic)
+
+    # Adapter: Convert flat string lists to list of dictionaries internally to preserve insertion / validation logic
+    for key, rel_lbl in [("prerequisites", "prerequisite"), ("next_topics", "successor"), ("related_topics", "related concept")]:
+        raw_list = data.get(key, [])
+        if raw_list and isinstance(raw_list, list) and all(isinstance(x, str) for x in raw_list):
+            data[key] = [{"topic": item, "why": f"{item} is a {rel_lbl} for {main_topic}."} for item in raw_list]
 
     all_ai_topics = {main_topic.lower()}
     for key in ("prerequisites", "next_topics", "related_topics", "foundation_topics", "beginner_topics", "intermediate_topics", "advanced_topics"):
