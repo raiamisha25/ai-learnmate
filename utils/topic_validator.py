@@ -389,7 +389,7 @@ def is_placeholder_concept(topic_name, main_topic=None):
     return False, "Not a placeholder"
 
 
-def get_topic_validation_details(topic, pdf_text=None, ai_topics=None, curated_topics=None, main_topic=None):
+def get_topic_validation_details(topic, pdf_text=None, ai_topics=None, curated_topics=None, main_topic=None, is_prereq=False):
     """
     Centralized validation function for concepts.
     Returns (is_valid, reason). Updates audit_tracker metrics.
@@ -468,6 +468,10 @@ def get_topic_validation_details(topic, pdf_text=None, ai_topics=None, curated_t
         audit_tracker.rejected += 1
         return False, f"Concept name too long (more than 6 words: '{cleaned}')"
 
+    # Bypass domain signal and single word checks for valid educational prerequisites (allowing cross-domain topics)
+    if is_prereq:
+        return True, "Valid concept (prerequisite bypassed domain checks)"
+
     # 8. Domain signal check
     if not _has_domain_signal(cleaned):
         audit_tracker.rejected += 1
@@ -502,7 +506,7 @@ def get_topic_validation_details(topic, pdf_text=None, ai_topics=None, curated_t
     return True, "Valid concept"
 
 
-def is_valid_topic(topic, approved_topics=None, validated_topics=None, main_topic=None):
+def is_valid_topic(topic, approved_topics=None, validated_topics=None, main_topic=None, is_prereq=False):
     """
     Simplified check without mutating audit counters (useful for quick checks).
     Supports request-scoped validated_topics context.
@@ -537,6 +541,10 @@ def is_valid_topic(topic, approved_topics=None, validated_topics=None, main_topi
         return False
     if len(words) > 6:
         return False
+
+    if is_prereq:
+        return True
+
     if not _has_domain_signal(cleaned):
         return False
     if len(words) == 1 and lower not in KNOWN_EDUCATIONAL_TOPICS:
@@ -564,9 +572,10 @@ def is_valid_relationship(src, dest, rel_type, why, existing_relationships=None,
     src_clean = canonicalize_concept_name(src)
     dest_clean = canonicalize_concept_name(dest)
 
+    is_dest_prereq = (rel_type == "PREREQUISITE_OF")
     if not src_clean or not is_valid_topic(src_clean, validated_topics=validated_topics):
         return False, f"Source concept '{src}' is invalid"
-    if not dest_clean or not is_valid_topic(dest_clean, validated_topics=validated_topics, main_topic=src_clean):
+    if not dest_clean or not is_valid_topic(dest_clean, validated_topics=validated_topics, main_topic=src_clean, is_prereq=is_dest_prereq):
         return False, f"Destination concept '{dest}' is invalid"
 
     src_norm = src_clean.lower()
