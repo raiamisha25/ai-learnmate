@@ -156,6 +156,10 @@ TECHNICAL_SIGNALS = {
     "quantum", "fundamental", "fundamentals", "table", "tables", "osi", "tcp", "ip",
     "optics", "ray", "wave", "light", "lens", "mirror", "reflection", "refraction", "laser", "thermodynamics", "electromagnetism",
     "fusion", "nuclear", "computing", "neuromorphic",
+    "cardiovascular", "immunology", "pharmacology", "pathology", "anatomy", "physiology", "atp", "calvin", "chloroplast", "photosynthesis", "respiration", "nucleosynthesis", "plasma", "tokamak", "orbital", "orbitals",
+    "circuit", "semiconductor", "amplifier", "fourier", "fluid", "stress", "strain", "statics", "dynamics", "transistor", "diode", "voltage", "current",
+    "microeconomics", "macroeconomics", "finance", "equity", "derivative", "option", "inflation", "gdp", "portfolio", "asset", "valuation",
+    "constitutional", "jurisprudence", "statute", "revolution", "feudalism", "cognition", "behavior", "neuroscience", "psychology", "history", "law",
 }
 
 SPECIAL_CASES = {
@@ -337,6 +341,47 @@ def is_hallucinated(concept_name, pdf_text=None, ai_topics=None, curated_topics=
     return True
 
 
+FORBIDDEN_MODIFIERS = {
+    "basic", "intermediate", "advanced", "applied", "practical", "core", "expert",
+    "mastering", "introductory", "fundamental", "overview", "basics", "principles",
+    "introduction", "implementation", "implementations", "application", "applications",
+    "optimization", "optimizations", "concept", "concepts", "topic", "topics"
+}
+
+def is_placeholder_concept(topic_name, main_topic=None):
+    if not topic_name or not isinstance(topic_name, str):
+        return True, "Empty concept name"
+    
+    cleaned = canonicalize_concept_name(topic_name)
+    low = cleaned.lower()
+
+    if (low.startswith("basic ") or low.startswith("intermediate ") or 
+        low.startswith("advanced ") or low.startswith("applied ") or 
+        low.startswith("practical ") or low.startswith("core ") or 
+        low.startswith("expert ") or low.startswith("mastering ") or
+        low.startswith("introductory ") or low.startswith("introduction to ") or
+        low.startswith("implementation of ") or low.startswith("overview of ") or
+        low.startswith("basics of ") or low.startswith("principles of ") or
+        low.startswith("applied ")):
+        return True, f"Concept '{cleaned}' uses forbidden template prefix"
+
+    if (low.endswith(" concept") or low.endswith(" concepts") or
+        low.endswith(" implementation") or low.endswith(" implementations") or
+        low.endswith(" application") or low.endswith(" applications") or
+        low.endswith(" optimization") or low.endswith(" optimizations") or
+        low.endswith(" topic") or low.endswith(" topics")):
+        return True, f"Concept '{cleaned}' uses forbidden template suffix"
+
+    if main_topic:
+        main_clean = canonicalize_concept_name(main_topic).lower()
+        if main_clean in low and low != main_clean:
+            remainder = low.replace(main_clean, "").strip().split()
+            if all(w in FORBIDDEN_MODIFIERS for w in remainder):
+                return True, f"Concept '{cleaned}' is a placeholder variation of main topic '{main_topic}'"
+
+    return False, "Not a placeholder"
+
+
 def get_topic_validation_details(topic, pdf_text=None, ai_topics=None, curated_topics=None):
     """
     Centralized validation function for concepts.
@@ -404,6 +449,12 @@ def get_topic_validation_details(topic, pdf_text=None, ai_topics=None, curated_t
         audit_tracker.ui_words += 1
         audit_tracker.rejected += 1
         return False, f"Concept '{cleaned}' is a UI or navigation keyword"
+
+    # 6b. Placeholder Concept Check
+    is_ph, ph_reason = is_placeholder_concept(cleaned)
+    if is_ph:
+        audit_tracker.rejected += 1
+        return False, ph_reason
 
     # 7. Word count limit
     if len(words) > 6:
@@ -474,6 +525,8 @@ def is_valid_topic(topic, approved_topics=None, validated_topics=None):
     if len(words) == 1 and (lower in VERBS or lower in ADJECTIVES):
         return False
     if any(w in PRONOUNS or w in UI_WORDS for w in words):
+        return False
+    if is_placeholder_concept(cleaned)[0]:
         return False
     if len(words) > 6:
         return False

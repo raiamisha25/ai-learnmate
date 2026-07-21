@@ -164,56 +164,53 @@ Return ONLY JSON in this exact shape:
 
 def build_roadmap_prompt(topic, context_text=None):
     system_prompt = """
-You are a university curriculum director.
-Design a structured, lightweight learning roadmap for a semester course.
-Return JSON only. Do not include long lecture paragraphs.
-Organize topics strictly into progressive educational levels.
+You are an expert University Curriculum Director and Knowledge Graph Architect.
+Your task is to construct a rigorous, domain-agnostic educational knowledge graph for a given learning topic.
+Return JSON ONLY. Do not include markdown wrappers, explanations, or long lecture paragraphs.
+
+CRITICAL ARCHITECTURAL DIRECTIVE:
+You act as a knowledge graph constructor, NOT a template generator.
+Every generated node MUST be an independently meaningful, standalone educational concept that could exist as a standalone Wikipedia article, textbook chapter, or university course lecture title (e.g., 'AVL Tree', 'Plasma Confinement', 'Calvin Cycle', 'Stellar Nucleosynthesis', 'Fourier Transform', 'Macroeconomics').
+
+STRICTLY FORBIDDEN TEMPLATE PATTERNS (NEVER GENERATE THESE):
+- NEVER generate placeholder names matching: 'Basic <Topic>', 'Intermediate <Topic>', 'Advanced <Topic>', 'Applied <Topic>', 'Practical <Topic>', 'Implementation of <Topic>', 'Introduction to <Topic>', 'Core <Topic>', 'Mastering <Topic>', 'Expert <Topic>', '<Topic> Concept', '<Topic> Applications', '<Topic> Optimization'.
+- If you cannot identify a genuine distinct educational concept for a list, return an empty list [].
+
+POSITIVE MULTI-DOMAIN KNOWLEDGE GRAPH EXAMPLES:
+- Computer Science: Linked List -> Prerequisites: [Arrays, Pointer] -> Successors: [Doubly Linked List, Circular Linked List, Skip List]
+- Computer Science: Binary Tree -> Prerequisites: [Recursion, Pointer] -> Successors: [Tree Traversal, Binary Search Tree, AVL Tree]
+- Physics: Electron -> Prerequisites: [Atomic Structure] -> Successors: [Electron Configuration, Atomic Orbitals, Chemical Bonding]
+- Physics: Nuclear Fusion -> Prerequisites: [Nuclear Physics] -> Successors: [Plasma Physics, Magnetic Confinement, Tokamak Reactor]
+- Biology: Photosynthesis -> Prerequisites: [Chloroplast, Plant Cell] -> Successors: [Light Dependent Reactions, Calvin Cycle, Cellular Respiration]
+- Mathematics: Linear Algebra -> Prerequisites: [Matrix, Vector] -> Successors: [Eigenvalues and Eigenvectors, Singular Value Decomposition]
 """
     user_prompt = f"""
-Create a university semester-style learning roadmap for: {topic}
+Construct a Knowledge Graph Roadmap for the educational concept: {topic}
 
-Context:
+Context / Study Material:
 {(context_text or topic)[:6000]}
 
-Return JSON only in this exact shape:
+Return JSON ONLY in this exact shape:
 {{
   "topic": "{topic}",
-  "estimated_study_time": "3-5 weeks (approx. 20-30 hours)",
+  "estimated_study_time": "3-5 hours",
   "difficulty": "Beginner | Intermediate | Advanced",
-  "foundation_topics": [
-    {{"topic": "Foundation Concept", "why": "Essential prerequisite foundation"}}
-  ],
-  "beginner_topics": [
-    {{"topic": "Introductory Concept", "why": "Core starting building block"}}
-  ],
-  "intermediate_topics": [
-    {{"topic": "Core Implementation Concept", "why": "Intermediate operational skill"}}
-  ],
-  "advanced_topics": [
-    {{"topic": "Advanced Concept", "why": "Advanced optimization or variation"}}
-  ],
-  "optional_reading": [
-    {{"topic": "Specialized Subtopic", "why": "Deep dive research topic"}}
-  ],
-  "learning_milestones": [
-    "Milestone 1: Can implement basic structure",
-    "Milestone 2: Understands time & space complexity"
-  ],
   "prerequisites": [
-    {{"topic": "Prerequisite Concept", "why": "Why needed first"}}
+    {{"topic": "Real Prerequisite Concept", "why": "Pedagogical dependency explanation"}}
   ],
   "next_topics": [
-    {{"topic": "Next Concept", "why": "Logical next step"}}
+    {{"topic": "Real Successor Concept", "why": "Logical successor explanation"}}
   ],
   "related_topics": [
-    {{"topic": "Related Concept", "why": "Complementary topic"}}
+    {{"topic": "Real Related Concept", "why": "Cross-cutting or complementary domain relationship"}}
   ]
 }}
 
 Rules:
-- Extract only real study concepts.
-- Keep explanations in 'why' fields concise (1-2 sentences).
-- Do not include long lecture paragraphs.
+1. Every item in 'prerequisites', 'next_topics', and 'related_topics' MUST be a real, distinct educational concept.
+2. NEVER produce template phrases like 'Basic {topic}', 'Applied {topic}', 'Intermediate {topic} Implementation', or 'Advanced {topic} Applications'.
+3. If no genuine distinct concept exists for a list, return [].
+4. Keep 'why' explanations concise (1-2 sentences).
 """
     return system_prompt, user_prompt
 
