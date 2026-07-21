@@ -156,18 +156,33 @@ CURATED_ROADMAPS = {
 
 
 def clean_json_object(text):
-    text = (text or "").strip()
-    if text.startswith("```"):
-        text = text.replace("```json", "").replace("```", "").strip()
-    start = text.find("{")
-    end = text.rfind("}")
-    if start != -1 and end != -1:
-        text = text[start : end + 1]
-    
-    # Sanitize control characters (U+0000 to U+001F) to prevent json decode crashes
     import re
-    text = re.sub(r'[\x00-\x1f]', lambda m: f'\\u{ord(m.group(0)):04x}', text)
-    return text
+    import ast
+    import json
+
+    text = (text or "").strip()
+
+    # 1. Regex to extract the JSON payload (everything from first { or [ to last } or ])
+    match = re.search(r'(\{.*\}|\[.*\])', text, re.DOTALL)
+    if match:
+        text = match.group(1)
+
+    # 2. Replace non-breaking spaces (\xa0) and zero-width spaces (\u200b) with standard spaces
+    text = text.replace('\xa0', ' ').replace('\u200b', ' ')
+
+    # Sanitize invalid control characters (except standard tabs/newlines)
+    text = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', lambda m: f'\\u{ord(m.group(0)):04x}', text)
+
+    # 3. Try parsing with json.loads. If it fails, fallback to ast.literal_eval
+    try:
+        parsed = json.loads(text)
+        return json.dumps(parsed)
+    except Exception:
+        try:
+            parsed = ast.literal_eval(text)
+            return json.dumps(parsed)
+        except Exception:
+            return text
 
 
 def fallback_roadmap(topic):
