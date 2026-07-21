@@ -260,7 +260,7 @@ def process_input(topic=None, text=None):
     canonical_topic = roadmap["topic"]
 
     # Diagnostic Logging: Pipeline Entry
-    logger.info(f"\n--- [DIAGNOSTIC PREREQUISITE RETRIEVAL] ---")
+    logger.info(f"\n--- [DIAGNOSTIC LEARN NEXT RECOMMENDATIONS] ---")
     logger.info(f"User Query: '{raw_query}'")
     logger.info(f"Canonical Topic: '{canonical_topic}'")
 
@@ -302,10 +302,10 @@ def process_input(topic=None, text=None):
             "why": f"{chain_topic} is a foundational prerequisite in the learning graph for {canonical_topic}."
         })
 
-    # Diagnostic Logging: Raw Relationships Retrieved
-    retrieved_before = [c["topic"] for c in raw_candidates_by_source["before"]]
-    logger.info(f"Neo4j Query: Multi-hop incoming PREREQUISITE_OF paths up to 5 levels for '{canonical_topic}'")
-    logger.info(f"Relationships Retrieved (Before): {retrieved_before}")
+    # Diagnostic Logging: Raw Outgoing Relationships Retrieved
+    retrieved_after = [c["topic"] for c in raw_candidates_by_source["after"]]
+    logger.info(f"Neo4j Query: Multi-hop outgoing NEXT_TOPIC/BUILDS_ON paths up to 5 levels for '{canonical_topic}'")
+    logger.info(f"Relationships Retrieved (After): {retrieved_after}")
 
     # Categorize and rank recommendations into distinct sections with cross-section deduplication
     categorized = categorize_and_rank_recommendations(
@@ -317,10 +317,10 @@ def process_input(topic=None, text=None):
     ranked_related = categorized["related"]
     ranked_applications = categorized["applications"]
 
-    # Diagnostic Logging: Final Prerequisite List after Deduplication and Ranking
-    final_prereq_names = [item["topic"] for item in ranked_before]
-    logger.info(f"Final Prerequisite List: {final_prereq_names}")
-    logger.info(f"---------------------------------------------\n")
+    # Diagnostic Logging: Final Learn Next Recommendations after Deduplication & Ranking
+    final_next_names = [f"{item['topic']} (score: {item['score']}, conf: {item['confidence']})" for item in ranked_after]
+    logger.info(f"Final Learn Next Recommendations: {final_next_names}")
+    logger.info(f"---------------------------------------------------\n")
 
     quiz_context = "\n".join(
         [

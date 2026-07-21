@@ -284,7 +284,7 @@ def fetch_graph_from_neo4j():
 def fetch_raw_suggestions_from_neo4j(topic=None):
     """
     Fetch all raw graph relationships from Neo4j without executing educational ranking.
-    Uses multi-hop path traversal up to 5 levels for prerequisite retrieval.
+    Uses multi-hop path traversal up to 5 levels for both prerequisite and progression retrieval.
     """
     try:
         with get_neo4j_driver() as driver:
@@ -295,18 +295,18 @@ def fetch_raw_suggestions_from_neo4j(topic=None):
                         """
                         MATCH (t:Concept)
                         WHERE toLower(t.name) = toLower($topic)
-                        OPTIONAL MATCH path = (before:Concept)-[r1:PREREQUISITE_OF|PREREQUISITE*1..5]->(t)
-                        OPTIONAL MATCH (t)-[r2]->(after:Concept)
+                        OPTIONAL MATCH path1 = (before:Concept)-[r1:PREREQUISITE_OF|PREREQUISITE*1..5]->(t)
+                        OPTIONAL MATCH path2 = (t)-[r2:NEXT_TOPIC|BUILDS_ON|EXTENDS|SPECIAL_CASE_OF|IMPLEMENTS|FOLLOWS*1..5]->(after:Concept)
                         WITH t,
                              collect(DISTINCT {
                                  topic: before.name,
-                                 relation: coalesce(relationships(path)[0].label, type(relationships(path)[0]), 'PREREQUISITE_OF'),
-                                 why: relationships(path)[0].why
+                                 relation: coalesce(relationships(path1)[0].label, type(relationships(path1)[0]), 'PREREQUISITE_OF'),
+                                 why: relationships(path1)[0].why
                              }) AS before_items,
                              collect(DISTINCT {
                                  topic: after.name,
-                                 relation: coalesce(r2.label, type(r2)),
-                                 why: r2.why
+                                 relation: coalesce(relationships(path2)[0].label, type(relationships(path2)[0]), 'NEXT_TOPIC'),
+                                 why: relationships(path2)[0].why
                              }) AS after_items
                         RETURN t.name AS topic, before_items, after_items
                         """,
@@ -316,18 +316,18 @@ def fetch_raw_suggestions_from_neo4j(topic=None):
                     records = session.run(
                         """
                         MATCH (t:Concept)
-                        OPTIONAL MATCH path = (before:Concept)-[r1:PREREQUISITE_OF|PREREQUISITE*1..5]->(t)
-                        OPTIONAL MATCH (t)-[r2]->(after:Concept)
+                        OPTIONAL MATCH path1 = (before:Concept)-[r1:PREREQUISITE_OF|PREREQUISITE*1..5]->(t)
+                        OPTIONAL MATCH path2 = (t)-[r2:NEXT_TOPIC|BUILDS_ON|EXTENDS|SPECIAL_CASE_OF|IMPLEMENTS|FOLLOWS*1..5]->(after:Concept)
                         WITH t,
                              collect(DISTINCT {
                                  topic: before.name,
-                                 relation: coalesce(relationships(path)[0].label, type(relationships(path)[0]), 'PREREQUISITE_OF'),
-                                 why: relationships(path)[0].why
+                                 relation: coalesce(relationships(path1)[0].label, type(relationships(path1)[0]), 'PREREQUISITE_OF'),
+                                 why: relationships(path1)[0].why
                              }) AS before_items,
                              collect(DISTINCT {
                                  topic: after.name,
-                                 relation: coalesce(r2.label, type(r2)),
-                                 why: r2.why
+                                 relation: coalesce(relationships(path2)[0].label, type(relationships(path2)[0]), 'NEXT_TOPIC'),
+                                 why: relationships(path2)[0].why
                              }) AS after_items
                         RETURN t.name AS topic, before_items, after_items
                         ORDER BY t.name
@@ -404,7 +404,7 @@ def fetch_topic_suggestions():
         candidates = item["before"] + item["after"]
         ranked = rank_recommendations(candidates, topic_name, limit=5)
 
-        befores = [r["topic"] for r in ranked if r.get("matched_relationships", [""])[0] in ("PREREQUISITE", "PREREQUISITE_OF", "requires", "builds_on")]
+        befores = [r["topic"] for r in ranked if r.get("matched_relationships", [""])[0] in ("PREREQUISITE", "PREREQUISITE_OF", "requires")]
         afters = [r["topic"] for r in ranked if r["topic"] not in befores]
 
         if befores or afters:
@@ -427,7 +427,7 @@ def fetch_suggestions_for_topic(topic):
     candidates = item["before"] + item["after"]
     ranked = rank_recommendations(candidates, clean_t, limit=5)
 
-    befores = [r["topic"] for r in ranked if r.get("matched_relationships", [""])[0] in ("PREREQUISITE", "PREREQUISITE_OF", "requires", "builds_on")]
+    befores = [r["topic"] for r in ranked if r.get("matched_relationships", [""])[0] in ("PREREQUISITE", "PREREQUISITE_OF", "requires")]
     afters = [r["topic"] for r in ranked if r["topic"] not in befores]
 
     return clean_topic_list(befores), clean_topic_list(afters)
@@ -509,7 +509,7 @@ def fetch_roadmap_from_neo4j(topic):
                     MATCH (topic:Concept)
                     WHERE toLower(topic.name) = toLower($topic)
                     OPTIONAL MATCH (pre:Concept)-[pre_rel:PREREQUISITE_OF]->(topic)
-                    OPTIONAL MATCH (topic)-[next_rel:NEXT_TOPIC]->(next:Concept)
+                    OPTIONAL MATCH (topic)-[next_rel:NEXT_TOPIC|BUILDS_ON|EXTENDS|SPECIAL_CASE_OF|IMPLEMENTS|FOLLOWS]->(next:Concept)
                     OPTIONAL MATCH (topic)-[related_rel:RELATED_TOPIC]->(related:Concept)
                     RETURN
                         collect(DISTINCT {topic: pre.name, why: pre_rel.why}) AS prerequisites,
