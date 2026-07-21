@@ -208,7 +208,8 @@ def validate_roadmap(data, requested_topic, is_from_pdf=False, context_text=None
         main_topic,
         pdf_text=context_text,
         ai_topics=all_ai_topics,
-        curated_topics=KNOWN_EDUCATIONAL_TOPICS
+        curated_topics=KNOWN_EDUCATIONAL_TOPICS,
+        main_topic=None
     )
 
     if not is_main_valid:
@@ -236,7 +237,8 @@ def validate_roadmap(data, requested_topic, is_from_pdf=False, context_text=None
                 item_topic,
                 pdf_text=context_text,
                 ai_topics=all_ai_topics,
-                curated_topics=KNOWN_EDUCATIONAL_TOPICS
+                curated_topics=KNOWN_EDUCATIONAL_TOPICS,
+                main_topic=main_topic
             )
             if not is_valid:
                 logger.info(f"[REJECTED CONCEPT] Concept '{item_topic}' in {label} rejected: {reason}")

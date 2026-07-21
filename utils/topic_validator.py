@@ -159,7 +159,7 @@ TECHNICAL_SIGNALS = {
     "cardiovascular", "immunology", "pharmacology", "pathology", "anatomy", "physiology", "atp", "calvin", "chloroplast", "photosynthesis", "respiration", "nucleosynthesis", "plasma", "tokamak", "orbital", "orbitals",
     "circuit", "semiconductor", "amplifier", "fourier", "fluid", "stress", "strain", "statics", "dynamics", "transistor", "diode", "voltage", "current",
     "microeconomics", "macroeconomics", "finance", "equity", "derivative", "option", "inflation", "gdp", "portfolio", "asset", "valuation",
-    "constitutional", "jurisprudence", "statute", "revolution", "feudalism", "cognition", "behavior", "neuroscience", "psychology", "history", "law",
+    "constitutional", "jurisprudence", "statute", "revolution", "feudalism", "cognition", "behavior", "neuroscience", "psychology", "history", "law", "mathematics", "math",
 }
 
 SPECIAL_CASES = {
@@ -355,25 +355,32 @@ def is_placeholder_concept(topic_name, main_topic=None):
     cleaned = canonicalize_concept_name(topic_name)
     low = cleaned.lower()
 
-    if (low.startswith("basic ") or low.startswith("intermediate ") or 
-        low.startswith("advanced ") or low.startswith("applied ") or 
-        low.startswith("practical ") or low.startswith("core ") or 
-        low.startswith("expert ") or low.startswith("mastering ") or
-        low.startswith("introductory ") or low.startswith("introduction to ") or
-        low.startswith("implementation of ") or low.startswith("overview of ") or
-        low.startswith("basics of ") or low.startswith("principles of ") or
-        low.startswith("applied ")):
-        return True, f"Concept '{cleaned}' uses forbidden template prefix"
-
-    if (low.endswith(" concept") or low.endswith(" concepts") or
-        low.endswith(" implementation") or low.endswith(" implementations") or
-        low.endswith(" application") or low.endswith(" applications") or
-        low.endswith(" optimization") or low.endswith(" optimizations") or
-        low.endswith(" topic") or low.endswith(" topics")):
-        return True, f"Concept '{cleaned}' uses forbidden template suffix"
-
     if main_topic:
         main_clean = canonicalize_concept_name(main_topic).lower()
+        # Check specific forbidden template patterns wrapping the main topic
+        templates = [
+            f"basic {main_clean} concept",
+            f"basic {main_clean} concepts",
+            f"basic {main_clean}",
+            f"applied {main_clean}",
+            f"advanced {main_clean} applications",
+            f"advanced {main_clean} application",
+            f"advanced {main_clean}",
+            f"intermediate {main_clean} implementation",
+            f"intermediate {main_clean} implementations",
+            f"intermediate {main_clean}",
+            f"introduction to {main_clean}",
+            f"intro to {main_clean}",
+            f"practical {main_clean}",
+            f"implementation of {main_clean}",
+            f"overview of {main_clean}",
+            f"basics of {main_clean}",
+            f"principles of {main_clean}",
+        ]
+        if low in templates:
+            return True, f"Concept '{cleaned}' is a generated template wrapping main topic '{main_topic}'"
+
+        # Check if the topic name consists only of the main topic padded with generic adjectives/suffixes
         if main_clean in low and low != main_clean:
             remainder = low.replace(main_clean, "").strip().split()
             if all(w in FORBIDDEN_MODIFIERS for w in remainder):
@@ -382,7 +389,7 @@ def is_placeholder_concept(topic_name, main_topic=None):
     return False, "Not a placeholder"
 
 
-def get_topic_validation_details(topic, pdf_text=None, ai_topics=None, curated_topics=None):
+def get_topic_validation_details(topic, pdf_text=None, ai_topics=None, curated_topics=None, main_topic=None):
     """
     Centralized validation function for concepts.
     Returns (is_valid, reason). Updates audit_tracker metrics.
@@ -451,7 +458,7 @@ def get_topic_validation_details(topic, pdf_text=None, ai_topics=None, curated_t
         return False, f"Concept '{cleaned}' is a UI or navigation keyword"
 
     # 6b. Placeholder Concept Check
-    is_ph, ph_reason = is_placeholder_concept(cleaned)
+    is_ph, ph_reason = is_placeholder_concept(cleaned, main_topic=main_topic)
     if is_ph:
         audit_tracker.rejected += 1
         return False, ph_reason
@@ -495,7 +502,7 @@ def get_topic_validation_details(topic, pdf_text=None, ai_topics=None, curated_t
     return True, "Valid concept"
 
 
-def is_valid_topic(topic, approved_topics=None, validated_topics=None):
+def is_valid_topic(topic, approved_topics=None, validated_topics=None, main_topic=None):
     """
     Simplified check without mutating audit counters (useful for quick checks).
     Supports request-scoped validated_topics context.
@@ -526,7 +533,7 @@ def is_valid_topic(topic, approved_topics=None, validated_topics=None):
         return False
     if any(w in PRONOUNS or w in UI_WORDS for w in words):
         return False
-    if is_placeholder_concept(cleaned)[0]:
+    if is_placeholder_concept(cleaned, main_topic=main_topic)[0]:
         return False
     if len(words) > 6:
         return False
@@ -559,7 +566,7 @@ def is_valid_relationship(src, dest, rel_type, why, existing_relationships=None,
 
     if not src_clean or not is_valid_topic(src_clean, validated_topics=validated_topics):
         return False, f"Source concept '{src}' is invalid"
-    if not dest_clean or not is_valid_topic(dest_clean, validated_topics=validated_topics):
+    if not dest_clean or not is_valid_topic(dest_clean, validated_topics=validated_topics, main_topic=src_clean):
         return False, f"Destination concept '{dest}' is invalid"
 
     src_norm = src_clean.lower()
