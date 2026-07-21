@@ -155,6 +155,7 @@ TECHNICAL_SIGNALS = {
     "design", "probability", "statistics", "evaluation", "physics", "mechanics",
     "quantum", "fundamental", "fundamentals", "table", "tables", "osi", "tcp", "ip",
     "optics", "ray", "wave", "light", "lens", "mirror", "reflection", "refraction", "laser", "thermodynamics", "electromagnetism",
+    "fusion", "nuclear", "computing", "neuromorphic",
 }
 
 SPECIAL_CASES = {
@@ -443,9 +444,10 @@ def get_topic_validation_details(topic, pdf_text=None, ai_topics=None, curated_t
     return True, "Valid concept"
 
 
-def is_valid_topic(topic, approved_topics=None):
+def is_valid_topic(topic, approved_topics=None, validated_topics=None):
     """
     Simplified check without mutating audit counters (useful for quick checks).
+    Supports request-scoped validated_topics context.
     """
     if not topic or not isinstance(topic, str):
         return False
@@ -453,6 +455,11 @@ def is_valid_topic(topic, approved_topics=None):
     if not cleaned:
         return False
     lower = cleaned.lower()
+
+    # Request-scoped validation context check: If accepted during roadmap validation in this request, recognize immediately
+    if validated_topics and (lower in validated_topics or cleaned in validated_topics):
+        return True
+
     words = lower.split()
     if re.match(r'^[.,;:!?\-+_#*()\s]+$', cleaned):
         return False
@@ -488,18 +495,18 @@ def is_valid_topic(topic, approved_topics=None):
     return True
 
 
-def is_valid_relationship(src, dest, rel_type, why, existing_relationships=None):
+def is_valid_relationship(src, dest, rel_type, why, existing_relationships=None, validated_topics=None):
     """
     Validates relationships before Neo4j storage.
     Ensures source & dest concepts exist, no self-loops, valid relation label,
-    non-trivial explanation, and no duplicates.
+    non-trivial explanation, and no duplicates. Accepts request-scoped validated_topics.
     """
     src_clean = canonicalize_concept_name(src)
     dest_clean = canonicalize_concept_name(dest)
 
-    if not src_clean or not is_valid_topic(src_clean):
+    if not src_clean or not is_valid_topic(src_clean, validated_topics=validated_topics):
         return False, f"Source concept '{src}' is invalid"
-    if not dest_clean or not is_valid_topic(dest_clean):
+    if not dest_clean or not is_valid_topic(dest_clean, validated_topics=validated_topics):
         return False, f"Destination concept '{dest}' is invalid"
 
     src_norm = src_clean.lower()

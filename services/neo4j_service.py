@@ -546,7 +546,12 @@ def fetch_roadmap_from_neo4j(topic):
 
 def save_roadmap_to_neo4j(roadmap):
     topic = canonicalize_concept_name(roadmap.get("topic"))
-    if not is_valid_topic(topic):
+    validated_topics = set(roadmap.get("validated_topics", []))
+    if topic:
+        validated_topics.add(topic.lower())
+        validated_topics.add(topic)
+
+    if not is_valid_topic(topic, validated_topics=validated_topics):
         logger.info(f"[NEO4J INSERTION] Skip saving roadmap: main topic '{topic}' is not valid.")
         return
 
@@ -557,7 +562,7 @@ def save_roadmap_to_neo4j(roadmap):
         for item in roadmap.get(key, []):
             if isinstance(item, dict) and item.get("topic"):
                 t_clean = canonicalize_concept_name(item.get("topic"))
-                if is_valid_topic(t_clean) and t_clean.lower() != topic.lower() and t_clean.lower() not in seen_prereqs:
+                if is_valid_topic(t_clean, validated_topics=validated_topics) and t_clean.lower() != topic.lower() and t_clean.lower() not in seen_prereqs:
                     seen_prereqs.add(t_clean.lower())
                     all_prereqs.append({"topic": t_clean, "why": item.get("why", "")})
 
@@ -568,7 +573,7 @@ def save_roadmap_to_neo4j(roadmap):
         for item in roadmap.get(key, []):
             if isinstance(item, dict) and item.get("topic"):
                 t_clean = canonicalize_concept_name(item.get("topic"))
-                if is_valid_topic(t_clean) and t_clean.lower() != topic.lower() and t_clean.lower() not in seen_next and t_clean.lower() not in seen_prereqs:
+                if is_valid_topic(t_clean, validated_topics=validated_topics) and t_clean.lower() != topic.lower() and t_clean.lower() not in seen_next and t_clean.lower() not in seen_prereqs:
                     seen_next.add(t_clean.lower())
                     next_items.append({"topic": t_clean, "why": item.get("why", "")})
 
@@ -577,7 +582,7 @@ def save_roadmap_to_neo4j(roadmap):
     for item in roadmap.get("related_topics", []):
         if isinstance(item, dict) and item.get("topic"):
             t_clean = canonicalize_concept_name(item.get("topic"))
-            if is_valid_topic(t_clean) and t_clean.lower() != topic.lower() and t_clean.lower() not in seen_rel and t_clean.lower() not in seen_prereqs and t_clean.lower() not in seen_next:
+            if is_valid_topic(t_clean, validated_topics=validated_topics) and t_clean.lower() != topic.lower() and t_clean.lower() not in seen_rel and t_clean.lower() not in seen_prereqs and t_clean.lower() not in seen_next:
                 seen_rel.add(t_clean.lower())
                 related_items.append({"topic": t_clean, "why": item.get("why", "")})
 

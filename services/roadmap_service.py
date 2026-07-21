@@ -219,6 +219,9 @@ def validate_roadmap(data, requested_topic, is_from_pdf=False, context_text=None
     audit_tracker.accepted += 1
     logger.info(f"[ACCEPTED CONCEPT] Main topic '{main_topic}' accepted.")
 
+    # Request-scoped validation context set for this roadmap execution
+    request_validated_topics = {main_topic.lower(), main_topic}
+
     def clean_topic_items(items, rel_type, label):
         cleaned_list = []
         seen_relations = set()
@@ -239,8 +242,11 @@ def validate_roadmap(data, requested_topic, is_from_pdf=False, context_text=None
                 logger.info(f"[REJECTED CONCEPT] Concept '{item_topic}' in {label} rejected: {reason}")
                 continue
 
+            request_validated_topics.add(item_topic.lower())
+            request_validated_topics.add(item_topic)
+
             is_rel_valid, rel_reason = is_valid_relationship(
-                main_topic, item_topic, rel_type, why, seen_relations
+                main_topic, item_topic, rel_type, why, seen_relations, validated_topics=request_validated_topics
             )
             if not is_rel_valid:
                 logger.info(f"[REJECTED CONCEPT] Relationship '{main_topic}' -[{rel_type}]-> '{item_topic}' rejected: {rel_reason}")
@@ -296,6 +302,7 @@ def validate_roadmap(data, requested_topic, is_from_pdf=False, context_text=None
         "prerequisites": all_prereqs,
         "next_topics": all_next,
         "related_topics": related_clean,
+        "validated_topics": list(request_validated_topics),
     }
 
     logger.info(f"[VALIDATION] Finished roadmap validation for '{main_topic}'. Total prerequisites: {len(all_prereqs)}, Next: {len(all_next)}")
