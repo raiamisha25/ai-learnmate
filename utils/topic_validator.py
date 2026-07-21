@@ -138,6 +138,7 @@ KNOWN_EDUCATIONAL_TOPICS = {
     "quick sort", "merge sort", "bubble sort", "insertion sort", "selection sort",
     "radix sort", "heap sort", "hash table", "hash tables", "hashing", "sorting algorithms",
     "osi model", "osi", "tcp/ip", "ip",
+    "optics", "ray optics", "wave optics", "fiber optics", "quantum optics", "thermodynamics", "kinematics", "electromagnetism",
 }
 
 TECHNICAL_SIGNALS = {
@@ -153,6 +154,7 @@ TECHNICAL_SIGNALS = {
     "geography", "economy", "ethics", "concurrency", "caching", "balancing",
     "design", "probability", "statistics", "evaluation", "physics", "mechanics",
     "quantum", "fundamental", "fundamentals", "table", "tables", "osi", "tcp", "ip",
+    "optics", "ray", "wave", "light", "lens", "mirror", "reflection", "refraction", "laser", "thermodynamics", "electromagnetism",
 }
 
 SPECIAL_CASES = {
@@ -218,7 +220,8 @@ def canonicalize_concept_name(name):
             'oss', 'dbms', 'gps', 'graphics', 'physics', 'mathematics', 'mechanics', 'quantum mechanics',
             'coordinates', 'class', 'bias', 'canvas', 'networks', 'neural networks', 'computer networks',
             'systems', 'distributed systems', 'operating systems', 'file systems',
-            'fundamentals', 'programming fundamentals', 'data structures', 'algorithms'
+            'fundamentals', 'programming fundamentals', 'data structures', 'algorithms',
+            'optics', 'ray optics', 'wave optics', 'fiber optics', 'quantum optics', 'thermodynamics', 'kinematics', 'electromagnetism'
         }
 
         is_except = False

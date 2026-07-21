@@ -296,7 +296,7 @@ def fetch_raw_suggestions_from_neo4j(topic=None):
                         MATCH (t:Concept)
                         WHERE toLower(t.name) = toLower($topic)
                         OPTIONAL MATCH path1 = (before:Concept)-[r1:PREREQUISITE_OF|PREREQUISITE*1..5]->(t)
-                        OPTIONAL MATCH path2 = (t)-[r2:NEXT_TOPIC|BUILDS_ON|EXTENDS|SPECIAL_CASE_OF|IMPLEMENTS|FOLLOWS*1..5]->(after:Concept)
+                        OPTIONAL MATCH path2 = (t)-[r2:NEXT_TOPIC|BUILDS_ON|EXTENDS|SPECIAL_CASE_OF|IMPLEMENTS|FOLLOWS|PREREQUISITE_OF*1..5]->(after:Concept)
                         WITH t,
                              collect(DISTINCT {
                                  topic: before.name,
@@ -317,7 +317,7 @@ def fetch_raw_suggestions_from_neo4j(topic=None):
                         """
                         MATCH (t:Concept)
                         OPTIONAL MATCH path1 = (before:Concept)-[r1:PREREQUISITE_OF|PREREQUISITE*1..5]->(t)
-                        OPTIONAL MATCH path2 = (t)-[r2:NEXT_TOPIC|BUILDS_ON|EXTENDS|SPECIAL_CASE_OF|IMPLEMENTS|FOLLOWS*1..5]->(after:Concept)
+                        OPTIONAL MATCH path2 = (t)-[r2:NEXT_TOPIC|BUILDS_ON|EXTENDS|SPECIAL_CASE_OF|IMPLEMENTS|FOLLOWS|PREREQUISITE_OF*1..5]->(after:Concept)
                         WITH t,
                              collect(DISTINCT {
                                  topic: before.name,
