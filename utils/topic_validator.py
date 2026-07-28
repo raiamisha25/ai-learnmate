@@ -348,6 +348,12 @@ FORBIDDEN_MODIFIERS = {
     "optimization", "optimizations", "concept", "concepts", "topic", "topics"
 }
 
+ALLOWED_DISCIPLINES = {
+    "algebra", "mathematics", "math", "physics", "chemistry", "biology", "economics",
+    "medicine", "history", "law", "finance", "geometry", "science", "calculus",
+    "psychology", "sociology", "philosophy", "accounting", "geography", "engineering"
+}
+
 def is_placeholder_concept(topic_name, main_topic=None):
     if not topic_name or not isinstance(topic_name, str):
         return True, "Empty concept name"
@@ -386,13 +392,52 @@ def is_placeholder_concept(topic_name, main_topic=None):
             if all(w in FORBIDDEN_MODIFIERS for w in remainder):
                 return True, f"Concept '{cleaned}' is a placeholder variation of main topic '{main_topic}'"
 
+    # General Placeholder Template Checks (rejecting e.g. "Basic Arrays" but allowing "Basic Algebra")
+    # Check prefixes
+    for prefix in ["basic ", "intermediate ", "advanced ", "applied ", "practical ", "expert ", "mastering ", "introductory ", "introduction to ", "basics of ", "principles of ", "overview of "]:
+        if low.startswith(prefix):
+            remainder = low[len(prefix):].strip()
+            # If the remainder is in ALLOWED_DISCIPLINES, it's a legitimate standalone subject, else it's a placeholder
+            if remainder not in ALLOWED_DISCIPLINES:
+                return True, f"Concept '{cleaned}' uses forbidden template prefix '{prefix.strip()}'"
+
+    # Check suffixes
+    for suffix in [" concept", " concepts", " implementation", " implementations", " application", " applications", " optimization", " optimizations", " topic", " topics"]:
+        if low.endswith(suffix):
+            remainder = low[:-len(suffix)].strip()
+            if remainder not in ALLOWED_DISCIPLINES:
+                return True, f"Concept '{cleaned}' uses forbidden template suffix '{suffix.strip()}'"
+
     return False, "Not a placeholder"
 
 
-def get_topic_validation_details(topic, pdf_text=None, ai_topics=None, curated_topics=None, main_topic=None, is_prereq=False):
+def check_node_exists_in_neo4j(concept_name):
+    """
+    Check if a concept node exists in Neo4j database.
+    Uses dynamic import to avoid circular dependency.
+    """
+    try:
+        from services.neo4j_service import get_neo4j_driver
+        clean_name = canonicalize_concept_name(concept_name)
+        if not clean_name:
+            return False
+        with get_neo4j_driver() as driver:
+            with driver.session() as session:
+                result = session.run(
+                    "MATCH (c:Concept) WHERE toLower(c.name) = toLower($name) RETURN count(c) > 0 AS exists",
+                    name=clean_name
+                ).single()
+                return result and result["exists"]
+    except Exception as exc:
+        logger.debug(f"Failed to check concept existence in Neo4j: {exc}")
+        return False
+
+
+def get_topic_validation_details(topic, pdf_text=None, ai_topics=None, curated_topics=None, main_topic=None, is_prereq=False, validated_topics=None, explanation=None):
     """
     Centralized validation function for concepts.
     Returns (is_valid, reason). Updates audit_tracker metrics.
+    Uses confidence-based validation: Priority 1 to 6.
     """
     audit_tracker.raw_concepts += 1
 
@@ -410,6 +455,15 @@ def get_topic_validation_details(topic, pdf_text=None, ai_topics=None, curated_t
     lower = cleaned.lower()
     words = lower.split()
 
+    # Priority 1: Already validated during the current request
+    if validated_topics and (lower in validated_topics or cleaned in validated_topics):
+        return True, "Valid concept (Priority 1: Already validated in current request)"
+
+    # Priority 2: Already exists in Neo4j
+    if check_node_exists_in_neo4j(cleaned):
+        return True, "Valid concept (Priority 2: Already exists in Neo4j)"
+
+    # Keep Rejecting: Syntax & Structure Rejections
     # 1. Punctuation-only check
     if re.match(r'^[.,;:!?\-+_#*()\s]+$', cleaned):
         audit_tracker.rejected += 1
@@ -457,53 +511,33 @@ def get_topic_validation_details(topic, pdf_text=None, ai_topics=None, curated_t
         audit_tracker.rejected += 1
         return False, f"Concept '{cleaned}' is a UI or navigation keyword"
 
-    # 6b. Placeholder Concept Check
+    # 7. Placeholder Concept Check
     is_ph, ph_reason = is_placeholder_concept(cleaned, main_topic=main_topic)
     if is_ph:
         audit_tracker.rejected += 1
         return False, ph_reason
 
-    # 7. Word count limit
+    # 8. Word count limit
     if len(words) > 6:
         audit_tracker.rejected += 1
         return False, f"Concept name too long (more than 6 words: '{cleaned}')"
 
-    # Bypass domain signal and single word checks for valid educational prerequisites (allowing cross-domain topics)
-    if is_prereq:
-        return True, "Valid concept (prerequisite bypassed domain checks)"
-
-    # 8. Domain signal check
-    if not _has_domain_signal(cleaned):
-        audit_tracker.rejected += 1
-        return False, f"Concept '{cleaned}' lacks a domain technical signal"
-
-    # Single generic word constraints
-    if len(words) == 1 and lower not in KNOWN_EDUCATIONAL_TOPICS:
-        allowed_single = {
-            "array", "arrays", "recursion", "arraylist", "hashmap", "hashset",
-            "heap", "stack", "queue", "graph", "cell", "mitochondria", "dna",
-            "rna", "enzyme", "chromosome", "overfitting", "underfitting",
-            "python", "java", "sql", "http", "api", "upsc", "gate", "cat",
-            "pointer", "pointers", "node", "nodes", "tree", "trees", "vector", "matrix",
-            "statistics", "probability", "caching", "concurrency", "sort", "sorting",
-        }
-        if lower not in allowed_single:
-            audit_tracker.rejected += 1
-            return False, f"Single word concept '{cleaned}' is not in approved educational list"
-
-    # 9. Hallucination Check
-    if is_hallucinated(cleaned, pdf_text, ai_topics, curated_topics):
-        audit_tracker.hallucinations += 1
-        audit_tracker.rejected += 1
-        return False, f"Concept '{cleaned}' is a hallucination (not verified by text or roadmap)"
-
-    # 10. Duplicate Check
+    # 9. Duplicate check (internal roadmap track to prevent redundant items in same request)
     if lower in audit_tracker.seen_concepts:
         audit_tracker.duplicates += 1
         audit_tracker.rejected += 1
         return False, f"Concept '{cleaned}' is a duplicate"
 
-    return True, "Valid concept"
+    # Determine matched priority for logging
+    matched_priority = "Priority 6 (Passed syntax validation)"
+    if ai_topics and isinstance(ai_topics, dict) and ai_topics.get(lower, 0) > 1:
+        matched_priority = "Priority 3 (Appears multiple times consistently)"
+    elif explanation and isinstance(explanation, str) and len(explanation.strip()) >= 10:
+        matched_priority = "Priority 4 (Has meaningful explanation)"
+    elif main_topic:
+        matched_priority = "Priority 5 (Has meaningful relationship to main topic)"
+
+    return True, f"Valid concept ({matched_priority})"
 
 
 def is_valid_topic(topic, approved_topics=None, validated_topics=None, main_topic=None, is_prereq=False):
@@ -518,8 +552,12 @@ def is_valid_topic(topic, approved_topics=None, validated_topics=None, main_topi
         return False
     lower = cleaned.lower()
 
-    # Request-scoped validation context check: If accepted during roadmap validation in this request, recognize immediately
+    # Priority 1: Check request-scoped validated topics
     if validated_topics and (lower in validated_topics or cleaned in validated_topics):
+        return True
+
+    # Priority 2: Check Neo4j existence
+    if check_node_exists_in_neo4j(cleaned):
         return True
 
     words = lower.split()
@@ -542,24 +580,7 @@ def is_valid_topic(topic, approved_topics=None, validated_topics=None, main_topi
     if len(words) > 6:
         return False
 
-    if is_prereq:
-        return True
-
-    if not _has_domain_signal(cleaned):
-        return False
-    if len(words) == 1 and lower not in KNOWN_EDUCATIONAL_TOPICS:
-        allowed_single = {
-            "array", "arrays", "recursion", "arraylist", "hashmap", "hashset",
-            "heap", "stack", "queue", "graph", "cell", "mitochondria", "dna",
-            "rna", "enzyme", "chromosome", "overfitting", "underfitting",
-            "python", "java", "sql", "http", "api", "upsc", "gate", "cat",
-            "pointer", "pointers", "node", "nodes", "tree", "trees", "vector", "matrix",
-            "statistics", "probability", "caching", "concurrency", "sort", "sorting",
-        }
-        if lower not in allowed_single:
-            return False
-    if approved_topics and lower not in {canonicalize_concept_name(item).lower() for item in approved_topics}:
-        return False
+    # Priority 6: Passes syntax validation
     return True
 
 

@@ -231,16 +231,20 @@ def validate_roadmap(data, requested_topic, is_from_pdf=False, context_text=None
                     normalized_list.append(item)
             data[key] = normalized_list
 
-    all_ai_topics = {main_topic.lower()}
+    from collections import Counter
+    ai_topic_counts = Counter()
+    ai_topic_counts[main_topic.lower()] += 1
     for key in ("prerequisites", "next_topics", "related_topics", "foundation_topics", "beginner_topics", "intermediate_topics", "advanced_topics"):
         for item in data.get(key, []):
             if isinstance(item, dict) and item.get("topic"):
-                all_ai_topics.add(canonicalize_concept_name(item.get("topic")).lower())
+                c_name = canonicalize_concept_name(item.get("topic")).lower()
+                if c_name:
+                    ai_topic_counts[c_name] += 1
 
     is_main_valid, main_reason = get_topic_validation_details(
         main_topic,
         pdf_text=context_text,
-        ai_topics=all_ai_topics,
+        ai_topics=ai_topic_counts,
         curated_topics=KNOWN_EDUCATIONAL_TOPICS,
         main_topic=None
     )
@@ -269,10 +273,12 @@ def validate_roadmap(data, requested_topic, is_from_pdf=False, context_text=None
             is_valid, reason = get_topic_validation_details(
                 item_topic,
                 pdf_text=context_text,
-                ai_topics=all_ai_topics,
+                ai_topics=ai_topic_counts,
                 curated_topics=KNOWN_EDUCATIONAL_TOPICS,
                 main_topic=main_topic,
-                is_prereq=(rel_type == "PREREQUISITE_OF")
+                is_prereq=(rel_type == "PREREQUISITE_OF"),
+                validated_topics=request_validated_topics,
+                explanation=why
             )
             if not is_valid:
                 logger.info(f"[REJECTED CONCEPT] Concept '{item_topic}' in {label} rejected: {reason}")
