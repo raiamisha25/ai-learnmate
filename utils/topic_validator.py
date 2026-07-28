@@ -348,12 +348,6 @@ FORBIDDEN_MODIFIERS = {
     "optimization", "optimizations", "concept", "concepts", "topic", "topics"
 }
 
-ALLOWED_DISCIPLINES = {
-    "algebra", "mathematics", "math", "physics", "chemistry", "biology", "economics",
-    "medicine", "history", "law", "finance", "geometry", "science", "calculus",
-    "psychology", "sociology", "philosophy", "accounting", "geography", "engineering"
-}
-
 def is_placeholder_concept(topic_name, main_topic=None):
     if not topic_name or not isinstance(topic_name, str):
         return True, "Empty concept name"
@@ -363,50 +357,33 @@ def is_placeholder_concept(topic_name, main_topic=None):
 
     if main_topic:
         main_clean = canonicalize_concept_name(main_topic).lower()
-        # Check specific forbidden template patterns wrapping the main topic
-        templates = [
-            f"basic {main_clean} concept",
-            f"basic {main_clean} concepts",
-            f"basic {main_clean}",
-            f"applied {main_clean}",
-            f"advanced {main_clean} applications",
-            f"advanced {main_clean} application",
-            f"advanced {main_clean}",
-            f"intermediate {main_clean} implementation",
-            f"intermediate {main_clean} implementations",
-            f"intermediate {main_clean}",
-            f"introduction to {main_clean}",
-            f"intro to {main_clean}",
-            f"practical {main_clean}",
-            f"implementation of {main_clean}",
-            f"overview of {main_clean}",
-            f"basics of {main_clean}",
-            f"principles of {main_clean}",
-        ]
-        if low in templates:
+        main_forms = {main_clean}
+        main_forms.add(main_clean + 's')
+        main_forms.add(main_clean + 'es')
+        if main_clean.endswith('y') and len(main_clean) > 1 and main_clean[-2] not in 'aeiou':
+            main_forms.add(main_clean[:-1] + 'ies')
+
+        main_pattern = r'\b(' + '|'.join(re.escape(form) for form in main_forms) + r')\b'
+
+        # Check prefixes & suffixes template patterns wrapping the main topic
+        prefixes = r"(basic|applied|advanced|intermediate|practical|introduction to|intro to|implementation of|overview of|basics of|principles of)"
+        suffixes = r"(concept|concepts|implementation|implementations|application|applications|optimization|optimizations|topic|topics)"
+        
+        pattern_1 = r"^" + prefixes + r"\s+" + main_pattern + r"(\s+" + suffixes + r")?$"
+        if re.match(pattern_1, low):
+            return True, f"Concept '{cleaned}' is a generated template wrapping main topic '{main_topic}'"
+
+        pattern_2 = r"^" + main_pattern + r"\s+" + suffixes + r"$"
+        if re.match(pattern_2, low):
             return True, f"Concept '{cleaned}' is a generated template wrapping main topic '{main_topic}'"
 
         # Check if the topic name consists only of the main topic padded with generic adjectives/suffixes
-        if main_clean in low and low != main_clean:
-            remainder = low.replace(main_clean, "").strip().split()
-            if all(w in FORBIDDEN_MODIFIERS for w in remainder):
+        match = re.search(main_pattern, low)
+        if match:
+            start, end = match.span()
+            remainder = (low[:start] + " " + low[end:]).strip().split()
+            if remainder and all(w in FORBIDDEN_MODIFIERS for w in remainder):
                 return True, f"Concept '{cleaned}' is a placeholder variation of main topic '{main_topic}'"
-
-    # General Placeholder Template Checks (rejecting e.g. "Basic Arrays" but allowing "Basic Algebra")
-    # Check prefixes
-    for prefix in ["basic ", "intermediate ", "advanced ", "applied ", "practical ", "expert ", "mastering ", "introductory ", "introduction to ", "basics of ", "principles of ", "overview of "]:
-        if low.startswith(prefix):
-            remainder = low[len(prefix):].strip()
-            # If the remainder is in ALLOWED_DISCIPLINES, it's a legitimate standalone subject, else it's a placeholder
-            if remainder not in ALLOWED_DISCIPLINES:
-                return True, f"Concept '{cleaned}' uses forbidden template prefix '{prefix.strip()}'"
-
-    # Check suffixes
-    for suffix in [" concept", " concepts", " implementation", " implementations", " application", " applications", " optimization", " optimizations", " topic", " topics"]:
-        if low.endswith(suffix):
-            remainder = low[:-len(suffix)].strip()
-            if remainder not in ALLOWED_DISCIPLINES:
-                return True, f"Concept '{cleaned}' uses forbidden template suffix '{suffix.strip()}'"
 
     return False, "Not a placeholder"
 
