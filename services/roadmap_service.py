@@ -347,6 +347,9 @@ def validate_roadmap(data, requested_topic, is_from_pdf=False, context_text=None
         "validated_topics": list(request_validated_topics),
     }
 
+    if not all_next:
+        logger.warning(f"[ROADMAP] No next_topics generated for '{main_topic}' — falling back")
+
     logger.info(f"[VALIDATION] Finished roadmap validation for '{main_topic}'. Total prerequisites: {len(all_prereqs)}, Next: {len(all_next)}")
     return cleaned
 
@@ -376,7 +379,55 @@ def generate_roadmap_with_ai(topic, context_text=None):
             main_title = canonicalize_concept_name(analysis.get("title") or topic)
             prereqs = [{"topic": canonicalize_concept_name(p.get("topic")), "why": p.get("why", "")} for p in analysis.get("prerequisites", []) if p.get("topic")]
             concepts = [canonicalize_concept_name(c.get("name")) for c in analysis.get("important_concepts", []) if c.get("name")]
-            next_t = [{"topic": c, "why": f"{c} is covered in this chapter."} for c in concepts[1:4]]
+            
+            # Read next_topics directly from follow_up_topics schema field
+            follow_ups = analysis.get("follow_up_topics", [])
+            next_t = []
+            if isinstance(follow_ups, list):
+                for item in follow_ups:
+                    if isinstance(item, dict) and item.get("topic"):
+                        c_name = canonicalize_concept_name(item.get("topic"))
+                        if c_name:
+                            next_t.append({"topic": c_name, "why": item.get("why", f"Follow-up topic after {main_title}.")})
+                    elif isinstance(item, str) and item:
+                        c_name = canonicalize_concept_name(item)
+                        if c_name:
+                            next_t.append({"topic": c_name, "why": f"Follow-up topic after {main_title}."})
+
+            # Fallback: If follow_up_topics is empty AND len(concepts) < 2, call general roadmap generator to backfill relationships
+            if not next_t and len(concepts) < 2:
+                logger.info(f"[ROADMAP] PDF follow_up_topics empty for '{topic}' — calling general roadmap generator to backfill graph relationships")
+                sys_prompt, usr_prompt = build_roadmap_prompt(topic, context_text)
+                gen_text, gen_err = safe_groq_generate(sys_prompt, usr_prompt, max_tokens=1500)
+                if not gen_err and gen_text:
+                    try:
+                        gen_data = json.loads(clean_json_object(gen_text))
+                        if isinstance(gen_data, dict):
+                            for item in gen_data.get("next_topics", []):
+                                if isinstance(item, dict) and item.get("topic"):
+                                    c_name = canonicalize_concept_name(item.get("topic"))
+                                    if c_name:
+                                        next_t.append({"topic": c_name, "why": item.get("why", f"Logical successor for {main_title}.")})
+                                elif isinstance(item, str) and item:
+                                    c_name = canonicalize_concept_name(item)
+                                    if c_name:
+                                        next_t.append({"topic": c_name, "why": f"Logical successor for {main_title}."})
+                            if not prereqs and gen_data.get("prerequisites"):
+                                for item in gen_data.get("prerequisites", []):
+                                    if isinstance(item, dict) and item.get("topic"):
+                                        c_name = canonicalize_concept_name(item.get("topic"))
+                                        if c_name:
+                                            prereqs.append({"topic": c_name, "why": item.get("why", f"Prerequisite for {main_title}.")})
+                    except Exception as exc:
+                        logger.warning(f"[ROADMAP] Failed parsing backfill roadmap for '{topic}': {exc}")
+
+            # Backup fallback: derive from remaining concepts if next_t is still empty
+            if not next_t and len(concepts) >= 2:
+                next_t = [{"topic": c, "why": f"{c} is covered in this chapter."} for c in concepts[1:4]]
+
+            related_t = [{"topic": c, "why": "Extracted concept"} for c in concepts[4:7]]
+            if not related_t and len(concepts) > 1:
+                related_t = [{"topic": c, "why": "Related chapter concept"} for c in concepts[1:]]
 
             roadmap_data = {
                 "topic": main_title,
@@ -389,7 +440,7 @@ def generate_roadmap_with_ai(topic, context_text=None):
                 "learning_milestones": analysis.get("learning_sequence") or ["Read chapter concepts"],
                 "prerequisites": prereqs[:4],
                 "next_topics": next_t[:4],
-                "related_topics": [{"topic": c, "why": "Extracted concept"} for c in concepts[4:7]],
+                "related_topics": related_t[:4],
             }
             return validate_roadmap(roadmap_data, topic, is_from_pdf=True, context_text=context_text)
 

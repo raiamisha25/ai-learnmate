@@ -123,9 +123,20 @@ Return ONLY JSON in this exact shape:
   ],
   "important_concepts": [
     {{
-      "name": "Concept Name",
+      "name": "Concept Name 1",
       "definition": "Clear 2-sentence definition",
       "importance": "Why this concept is fundamental"
+    }},
+    {{
+      "name": "Concept Name 2",
+      "definition": "Clear 2-sentence definition",
+      "importance": "Why this concept is fundamental"
+    }}
+  ],
+  "follow_up_topics": [
+    {{
+      "topic": "Concept the student should study after this chapter",
+      "why": "Pedagogical reason why this concept is a logical next topic to study."
     }}
   ],
   "definitions": [
@@ -158,6 +169,10 @@ Return ONLY JSON in this exact shape:
     "Concise key takeaway 2"
   ]
 }}
+
+Rules:
+1. Extract a MINIMUM of 4 to 6 distinct, meaningful 'important_concepts' from the study material whenever the content supports it.
+2. Provide dedicated 'follow_up_topics' (at least 2-4 topics) representing logical next concepts a student should study after mastering this chapter, with a clear 'why' explanation for each.
 """
     return system_prompt, user_prompt
 
