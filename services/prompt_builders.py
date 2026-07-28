@@ -193,21 +193,27 @@ Context / Study Material:
 Return JSON ONLY in this exact shape:
 {{
   "prerequisites": [
-    "Real Prerequisite Concept 1",
-    "Real Prerequisite Concept 2"
+    {{
+      "topic": "Real Prerequisite Concept 1",
+      "why": "Pedagogical explanation of why this prerequisite is required."
+    }}
   ],
   "next_topics": [
-    "Real Successor Concept 1",
-    "Real Successor Concept 2"
+    {{
+      "topic": "Real Successor Concept 1",
+      "why": "Pedagogical explanation of why this is a logical next topic."
+    }}
   ],
   "related_topics": [
-    "Real Related Concept 1",
-    "Real Related Concept 2"
+    {{
+      "topic": "Real Related Concept 1",
+      "why": "Explanation of how this connects to the main topic."
+    }}
   ]
 }}
 
 Rules:
-1. Every item in 'prerequisites', 'next_topics', and 'related_topics' MUST be a real, distinct educational concept name (a flat string).
+1. Every item in 'prerequisites', 'next_topics', and 'related_topics' MUST be a dictionary containing 'topic' (a real, distinct educational concept name) and 'why' (a clear relationship explanation of at least 10 characters).
 2. NEVER produce template phrases like 'Basic {topic}', 'Applied {topic}', 'Intermediate {topic} Implementation', or 'Advanced {topic} Applications'.
 3. If no genuine distinct concept exists for a list, return [].
 """
