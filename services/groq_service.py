@@ -9,7 +9,7 @@ from utils.errors import friendly_ai_error
 
 load_dotenv()
 
-GROQ_MODEL = os.getenv("GROQ_MODEL", "llama3-70b-8192")
+GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
 
 
@@ -51,16 +51,20 @@ def safe_groq_generate(system_prompt, user_prompt, timeout_seconds=25, max_token
                     {"role": "user", "content": user_prompt},
                 ],
                 temperature=0.2,
-                max_tokens=max_tokens,
+                max_completion_tokens=max_tokens,
+                reasoning_effort="low",
+                include_reasoning=False,
                 timeout=timeout_seconds,
             )
-            text = response.choices[0].message.content
+            text = response.choices[0].message.content if (response and response.choices and len(response.choices) > 0) else None
 
             if text and text.strip():
                 logger.info(f"[AI RESPONSE] Received response (length: {len(text)}):\n{text}")
                 return text, None
 
-            last_error = "Empty AI response"
+            finish_reason = response.choices[0].finish_reason if (response and response.choices and len(response.choices) > 0) else "unknown"
+            logger.warning(f"[AI RESPONSE DIAGNOSTIC] Empty content received. Model: {GROQ_MODEL}, finish_reason: {finish_reason}")
+            last_error = f"Empty AI response (finish_reason: {finish_reason})"
             print(f"Groq call attempt {attempt} failed: {last_error}")
         except Exception as exc:
             last_error = str(exc)
@@ -81,7 +85,7 @@ def check_groq_startup():
         "Reply with exactly OK.",
         "Say OK.",
         timeout_seconds=8,
-        max_tokens=10,
+        max_tokens=100,
     )
 
     if error:
